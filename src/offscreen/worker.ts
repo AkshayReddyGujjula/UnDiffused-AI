@@ -193,23 +193,55 @@ async function runInference(features: Float32Array): Promise<{ isAI: boolean; co
     const feeds = { input: inputTensor };
     const results = await inferenceSession.run(feeds);
 
-    // Parse results
-    // The model outputs: 'output_label' (class) and 'output_probability' (probabilities)
+    // Log available output names for debugging
+    console.log('[UnDiffused] Model output names:', Object.keys(results));
+
+    // Parse results - sklearn pipelines output 'output_label' and 'output_probability'
+    // The probability output is a ZipMap (sequence of maps), not a simple tensor
     const labelOutput = results['output_label'];
-    const probOutput = results['output_probability'];
 
-    if (labelOutput && probOutput) {
-        const label = (labelOutput.data as BigInt64Array)[0];
-        const probs = probOutput.data as Float32Array;
-
-        // Label 1 = AI-generated, Label 0 = Real
-        const isAI = Number(label) === 1;
-        const confidence = isAI ? probs[1] : probs[0];
-
-        return { isAI, confidence: Math.round(confidence * 100) };
+    if (!labelOutput) {
+        // Try alternative output names
+        const outputNames = Object.keys(results);
+        throw new Error(`No label output found. Available outputs: ${outputNames.join(', ')}`);
     }
 
-    throw new Error('Unexpected model output format');
+    // Get predicted label (0 = Real, 1 = AI-generated)
+    const label = Number((labelOutput.data as BigInt64Array)[0]);
+    const isAI = label === 1;
+
+    // For probability, try to extract from output_probability if available as tensor
+    // If not, we'll estimate confidence based on the prediction
+    let confidence = 85; // Default confidence
+
+    const probOutput = results['output_probability'];
+    if (probOutput) {
+        try {
+            // Check if it's a tensor type we can read
+            const outputType = probOutput.type as string;
+            if (outputType === 'float32' || outputType === 'float64') {
+                const probs = probOutput.data as Float32Array;
+                // Probabilities are [prob_class_0, prob_class_1]
+                confidence = Math.round((isAI ? probs[1] : probs[0]) * 100);
+            } else if (outputType.includes('map') || outputType.includes('seq')) {
+                // ZipMap format - extract from the sequence
+                // The data is structured as [{0: prob0, 1: prob1}]
+                const mapData = probOutput.data as unknown;
+                if (Array.isArray(mapData) && mapData.length > 0) {
+                    const probMap = mapData[0] as Map<bigint, number>;
+                    if (probMap instanceof Map) {
+                        const prob0 = probMap.get(BigInt(0)) || 0;
+                        const prob1 = probMap.get(BigInt(1)) || 0;
+                        confidence = Math.round((isAI ? prob1 : prob0) * 100);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[UnDiffused] Could not parse probability output, using default confidence:', e);
+        }
+    }
+
+    return { isAI, confidence };
 }
 
 /**

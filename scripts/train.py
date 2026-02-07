@@ -172,10 +172,12 @@ def export_to_onnx(pipeline: Pipeline, output_path: Path):
     initial_type = [('input', FloatTensorType([None, IMAGE_SIZE * IMAGE_SIZE]))]
     
     # Convert to ONNX
+    # zipmap=False ensures probabilities are output as a simple tensor, not a map
     onnx_model = convert_sklearn(
         pipeline, 
         initial_types=initial_type,
-        target_opset=12
+        target_opset=12,
+        options={'zipmap': False}
     )
     
     # Save
