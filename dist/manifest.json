@@ -23,7 +23,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.tsx-CTXPyBih.js"
+        "assets/index.tsx-DvgyRi8d.js"
       ],
       "matches": [
         "<all_urls>"
@@ -40,7 +40,7 @@
         "<all_urls>"
       ],
       "resources": [
-        "assets/index.tsx-CTXPyBih.js"
+        "assets/index.tsx-DvgyRi8d.js"
       ],
       "use_dynamic_url": false
     }

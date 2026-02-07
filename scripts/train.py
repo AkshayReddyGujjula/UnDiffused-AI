@@ -59,13 +59,13 @@ def process_image(image_path: str) -> np.ndarray:
     # Convert to grayscale
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
     
-    # Apply Laplacian filter (matches TypeScript convolution)
-    laplacian = cv2.filter2D(gray, -1, LAPLACIAN_KERNEL)
+    # Apply Laplacian filter (matches TypeScript convolution with BORDER_REPLICATE)
+    laplacian = cv2.filter2D(gray, -1, LAPLACIAN_KERNEL, borderType=cv2.BORDER_REPLICATE)
     
     # Calculate gradient magnitude using Sobel operators
-    # This matches the TypeScript implementation
-    gx = cv2.Sobel(laplacian, cv2.CV_32F, 1, 0, ksize=3)
-    gy = cv2.Sobel(laplacian, cv2.CV_32F, 0, 1, ksize=3)
+    # Use BORDER_REPLICATE to match browser implementation
+    gx = cv2.Sobel(laplacian, cv2.CV_32F, 1, 0, ksize=3, borderType=cv2.BORDER_REPLICATE)
+    gy = cv2.Sobel(laplacian, cv2.CV_32F, 0, 1, ksize=3, borderType=cv2.BORDER_REPLICATE)
     gradient_magnitude = np.sqrt(gx**2 + gy**2)
     
     # Normalize to 0-255 range

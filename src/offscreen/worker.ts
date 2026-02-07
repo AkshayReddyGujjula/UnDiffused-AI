@@ -84,13 +84,17 @@ function convolve(
 ): Float32Array {
     const output = new Float32Array(width * height);
 
-    for (let y = 1; y < height - 1; y++) {
-        for (let x = 1; x < width - 1; x++) {
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
             let sum = 0;
 
             for (let ky = -1; ky <= 1; ky++) {
                 for (let kx = -1; kx <= 1; kx++) {
-                    const idx = (y + ky) * width + (x + kx);
+                    // Clamp coordinates to handle borders (BORDER_REPLICATE)
+                    const py = Math.min(Math.max(y + ky, 0), height - 1);
+                    const px = Math.min(Math.max(x + kx, 0), width - 1);
+                    const idx = py * width + px;
+
                     sum += data[idx] * kernel[ky + 1][kx + 1];
                 }
             }

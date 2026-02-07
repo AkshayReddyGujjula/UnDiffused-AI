@@ -225,13 +225,91 @@ const TAILWIND_STYLES = `
 @keyframes pulse {
   50% { opacity: .5; }
 }
+
+/* ===== ADDITIONAL UTILITIES ===== */
+.flex-1 { flex: 1 1 0%; }
+.w-4 { width: 1rem; }
+.w-8 { width: 2rem; }
+.h-4 { height: 1rem; }
+.h-8 { height: 2rem; }
+.h-40 { height: 10rem; }
+.mt-3 { margin-top: 0.75rem; }
+.gap-1 { gap: 0.25rem; }
+.gap-1\\.5 { gap: 0.375rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.py-1\\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.top-2 { top: 0.5rem; }
+.right-2 { right: 0.5rem; }
+
+.bg-white\\/20 { background-color: rgba(255, 255, 255, 0.2); }
+.bg-black\\/50 { background-color: rgba(0, 0, 0, 0.5); }
+.bg-black\\/70 { background-color: rgba(0, 0, 0, 0.7); }
+.bg-red-500\\/80 { background-color: rgba(239, 68, 68, 0.8); }
+.border-red-400\\/50 { border-color: rgba(248, 113, 113, 0.5); }
+
+.transition-opacity { transition-property: opacity; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.duration-150 { transition-duration: 150ms; }
+.duration-200 { transition-duration: 200ms; }
+
+.hover\\:scale-105:hover { transform: scale(1.05); }
+.hover\\:scale-110:hover { transform: scale(1.1); }
+.hover\\:bg-white\\/20:hover { background-color: rgba(255, 255, 255, 0.2); }
+.hover\\:bg-black\\/70:hover { background-color: rgba(0, 0, 0, 0.7); }
+
+.cursor-pointer { cursor: pointer; }
+.appearance-none { appearance: none; -webkit-appearance: none; }
+
+/* ===== RANGE SLIDER STYLING ===== */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 0.5rem;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
 `;
 
 /**
  * Inject styles into a Shadow DOM
  */
 export function injectStyles(shadowRoot: ShadowRoot): void {
-    const styleElement = document.createElement('style');
-    styleElement.textContent = TAILWIND_STYLES;
-    shadowRoot.appendChild(styleElement);
+  const styleElement = document.createElement('style');
+  styleElement.textContent = TAILWIND_STYLES;
+  shadowRoot.appendChild(styleElement);
 }
