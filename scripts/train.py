@@ -1,22 +1,18 @@
 
 """
-UnDiffused Training Script (PyTorch CNN)
-========================================
+UnDiffused Training Script (PyTorch CNN) - Optimized
+====================================================
 Trains a Convolutional Neural Network (CNN) to detect AI-generated images.
-This replaces the previous Logistic Regression model for better accuracy.
-
-Pipeline: Image → Resize(128x128) → Grayscale → Laplacian → Gradient Magnitude → CNN → ONNX
-
-Requirements:
-    pip install torch torchvision numpy opencv-python onnx onnxruntime
+OPTIMIZED for NVIDIA GPUs (CUDA) and Multi-core CPUs.
 
 Usage:
     python scripts/train.py
-    python scripts/train.py --test  # Quick validation with subset
+    python scripts/train.py --workers 8 --batch-size 64
 """
 
 import os
 import argparse
+import time
 import numpy as np
 import cv2
 import torch
@@ -28,7 +24,7 @@ from sklearn.metrics import accuracy_score, classification_report
 
 # Constants
 IMAGE_SIZE = 128
-BATCH_SIZE = 32
+DEFAULT_BATCH_SIZE = 64
 EPOCHS = 10
 LEARNING_RATE = 0.001
 DATASET_PATH = Path(r"C:\Users\aksha\Desktop\Hackathons & Events\AI Ventures Hackathon Imperial\train")
@@ -69,13 +65,12 @@ class ImageDataset(Dataset):
         path, label = self.samples[idx]
         features = self.process_image(path)
         # Convert to tensor (C, H, W) -> (1, 128, 128)
-        return torch.FloatTensor(features).unsqueeze(0), torch.tensor(label, dtype=torch.float32)
+        return torch.from_numpy(features).unsqueeze(0), torch.tensor(label, dtype=torch.float32)
 
     def process_image(self, image_path):
         """Matches the TypeScript feature extraction exactly"""
         img = cv2.imread(image_path)
         if img is None:
-            # Return zero array if load fails (shouldn't happen often)
             return np.zeros((IMAGE_SIZE, IMAGE_SIZE), dtype=np.float32)
         
         img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
@@ -93,7 +88,7 @@ class ImageDataset(Dataset):
         magnitude = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
         
         # Normalize to 0-1 for Neural Network stability
-        return magnitude / 255.0
+        return (magnitude / 255.0).astype(np.float32)
 
 class SimpleCNN(nn.Module):
     def __init__(self):
@@ -129,32 +124,63 @@ class SimpleCNN(nn.Module):
 
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test', action='store_true')
+    parser.add_argument('--test', action='store_true', help='Run quickly on small subset')
+    parser.add_argument('--workers', type=int, default=4, help='Number of data loading workers')
+    parser.add_argument('--batch-size', type=int, default=DEFAULT_BATCH_SIZE, help='Batch size')
     args = parser.parse_args()
 
-    # Setup
+    # Optimization: Use cuDNN benchmark
+    torch.backends.cudnn.benchmark = True
+
+    # Setup Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+    if device.type == 'cuda':
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(f"Workers: {args.workers}")
+        print(f"Batch Size: {args.batch_size}")
     
+    # Load Data
     full_dataset = ImageDataset(DATASET_PATH, test_mode=args.test)
     train_size = int(0.8 * len(full_dataset))
     test_size = len(full_dataset) - train_size
     train_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [train_size, test_size])
     
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    # Optimization: num_workers, pin_memory
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=args.batch_size, 
+        shuffle=True,
+        num_workers=args.workers,
+        pin_memory=True, # Faster transfer to GPU
+        persistent_workers=True if args.workers > 0 else False
+    )
+    
+    test_loader = DataLoader(
+        test_dataset, 
+        batch_size=args.batch_size, 
+        shuffle=False,
+        num_workers=args.workers,
+        pin_memory=True,
+        persistent_workers=True if args.workers > 0 else False
+    )
     
     model = SimpleCNN().to(device)
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     
     # Train Loop
-    print(f"Starting training for {EPOCHS} epochs...")
+    print(f"\nStarting training for {EPOCHS} epochs...")
+    start_time = time.time()
+    
     for epoch in range(EPOCHS):
         model.train()
         running_loss = 0.0
+        batch_count = 0
+        
+        epoch_start = time.time()
         for inputs, labels in train_loader:
-            inputs, labels = inputs.to(device), labels.to(device).unsqueeze(1)
+            inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True).unsqueeze(1)
             
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -163,19 +189,29 @@ def train():
             optimizer.step()
             
             running_loss += loss.item()
+            batch_count += 1
             
-        print(f"Epoch {epoch+1}/{EPOCHS}, Loss: {running_loss/len(train_loader):.4f}")
+            if batch_count % 100 == 0:
+                print(f"  Batch {batch_count}/{len(train_loader)} | Loss: {loss.item():.4f}", end='\r')
+            
+        avg_loss = running_loss / len(train_loader)
+        epoch_dur = time.time() - epoch_start
+        print(f"Epoch {epoch+1}/{EPOCHS} | Loss: {avg_loss:.4f} | Time: {epoch_dur:.1f}s")
+        
+    total_time = time.time() - start_time
+    print(f"\nTraining finished in {total_time/60:.1f} minutes.")
         
     # Evaluate
+    print("\nEvaluating model...")
     model.eval()
     y_true = []
     y_pred = []
     with torch.no_grad():
         for inputs, labels in test_loader:
-            inputs = inputs.to(device)
+            inputs = inputs.to(device, non_blocking=True)
             outputs = model(inputs)
             predicted = (outputs > 0.5).float()
-            y_true.extend(labels.numpy())
+            y_true.extend(labels.cpu().numpy())
             y_pred.extend(predicted.cpu().numpy())
             
     acc = accuracy_score(y_true, y_pred)
@@ -197,7 +233,9 @@ def train():
         output_names=['output'],
         dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}}
     )
-    print(f"Model exported to {output_path}")
+    print(f"\n[SUCCESS] Model exported to {output_path}")
 
 if __name__ == "__main__":
+    # Windows-specific fix for multiprocessing
+    # torch.multiprocessing.freeze_support() might be needed if packaging, but okay for script
     train()
