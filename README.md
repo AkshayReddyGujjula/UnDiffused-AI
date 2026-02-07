@@ -1,1 +1,1 @@
-# AI-Image-Checker
+# UnDiffused AI
