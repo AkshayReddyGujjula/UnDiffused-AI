@@ -4,7 +4,7 @@
  * Injects the Scanner UI into a Shadow DOM for style isolation.
  */
 
-import React from 'react';
+
 import { createRoot } from 'react-dom/client';
 import { Scanner } from './Scanner';
 import { injectStyles } from './styles';
