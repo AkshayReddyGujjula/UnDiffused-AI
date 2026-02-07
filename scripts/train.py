@@ -27,7 +27,7 @@ IMAGE_SIZE = 128
 DEFAULT_BATCH_SIZE = 64
 EPOCHS = 10
 LEARNING_RATE = 0.001
-DATASET_PATH = Path(r"C:\Users\aksha\Desktop\Hackathons & Events\AI Ventures Hackathon Imperial\train")
+DATASET_PATH = Path(r"C:\Users\aksha\Desktop\DataSets\train")
 
 # Laplacian kernel (must match TypeScript implementation)
 LAPLACIAN_KERNEL = np.array([
