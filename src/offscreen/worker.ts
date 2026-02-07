@@ -231,57 +231,35 @@ async function extractFeatures(imageUrl: string): Promise<{ features: Float32Arr
 async function runInference(features: Float32Array): Promise<{ isAI: boolean; confidence: number }> {
     const inferenceSession = await initSession();
 
-    // Log model input/output names for debugging
+    // Log model input/output names for debug
     console.log('[UnDiffused] Model inputs:', inferenceSession.inputNames);
-    console.log('[UnDiffused] Model outputs:', inferenceSession.outputNames);
 
-    // Create input tensor - use first input name from model
+    // Normalize to 0-1 for CNN (features are 0-255)
+    // Create a new array to avoid modifying the visualization data
+    const inputData = new Float32Array(features.length);
+    for (let i = 0; i < features.length; i++) {
+        inputData[i] = features[i] / 255.0;
+    }
+
+    // Create input tensor [1, 1, 128, 128]
     const inputName = inferenceSession.inputNames[0];
-    const inputTensor = new ort.Tensor('float32', features, [1, features.length]);
+    const inputTensor = new ort.Tensor('float32', inputData, [1, 1, IMAGE_SIZE, IMAGE_SIZE]);
 
-    // Run inference without specifying outputs - let ONNX figure it out
+    // Run inference
     const feeds: Record<string, ort.Tensor> = {};
     feeds[inputName] = inputTensor;
 
     const results = await inferenceSession.run(feeds);
 
-    console.log('[UnDiffused] Inference results:', Object.keys(results));
+    // Get output (Sigmoid probability of being AI)
+    const outputName = inferenceSession.outputNames[0];
+    const outputTensor = results[outputName];
 
-    // Find the label output (first output or one containing 'label')
-    const outputNames = Object.keys(results);
-    let labelOutputName = outputNames.find(n => n.toLowerCase().includes('label')) || outputNames[0];
+    const probability = outputTensor.data[0] as number;
+    const isAI = probability > 0.5;
 
-    const labelOutput = results[labelOutputName];
-    if (!labelOutput) {
-        throw new Error(`No output found. Available outputs: ${outputNames.join(', ')}`);
-    }
-
-    // Get predicted label - handle different data types
-    let label: number;
-    if (labelOutput.data instanceof BigInt64Array) {
-        label = Number(labelOutput.data[0]);
-    } else if (labelOutput.data instanceof Int32Array || labelOutput.data instanceof Float32Array) {
-        label = labelOutput.data[0];
-    } else {
-        label = Number((labelOutput.data as unknown[])[0]);
-    }
-
-    const isAI = label === 1;
-
-    // Try to get confidence from probability output if available
-    let confidence = 85;
-    const probOutputName = outputNames.find(n => n.toLowerCase().includes('prob'));
-    if (probOutputName) {
-        try {
-            const probOutput = results[probOutputName];
-            if (probOutput.data instanceof Float32Array) {
-                const probs = probOutput.data;
-                confidence = Math.round((isAI ? probs[1] : probs[0]) * 100);
-            }
-        } catch (e) {
-            console.warn('[UnDiffused] Could not parse probability:', e);
-        }
-    }
+    // Calculate confidence
+    const confidence = Math.round((isAI ? probability : 1 - probability) * 100);
 
     return { isAI, confidence };
 }

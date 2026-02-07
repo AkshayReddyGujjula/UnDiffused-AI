@@ -9,23 +9,23 @@
     "file": "assets/ResultView-BUyCCZRO.js",
     "name": "ResultView"
   },
-  "_index-Bt3_gI9e.css": {
-    "file": "assets/index-Bt3_gI9e.css",
-    "src": "_index-Bt3_gI9e.css"
+  "_index-B7JJQUdQ.css": {
+    "file": "assets/index-B7JJQUdQ.css",
+    "src": "_index-B7JJQUdQ.css"
   },
-  "_index-PhIyDHzK.js": {
-    "file": "assets/index-PhIyDHzK.js",
+  "_index-BFdlunO7.js": {
+    "file": "assets/index-BFdlunO7.js",
     "name": "index",
     "imports": [
       "_ResultView-BUyCCZRO.js"
     ],
     "css": [
-      "assets/index-Bt3_gI9e.css"
+      "assets/index-B7JJQUdQ.css"
     ]
   },
-  "_index.tsx-loader-CcRDqYKy.js": {
-    "file": "assets/index.tsx-loader-CcRDqYKy.js",
-    "src": "_index.tsx-loader-CcRDqYKy.js"
+  "_index.tsx-loader-RESjUv0a.js": {
+    "file": "assets/index.tsx-loader-RESjUv0a.js",
+    "src": "_index.tsx-loader-RESjUv0a.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -42,7 +42,7 @@
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-ByR3lM1B.js",
+    "file": "assets/index.tsx-CDA2YO5D.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,
@@ -51,7 +51,7 @@
     ]
   },
   "src/offscreen/offscreen.html": {
-    "file": "assets/offscreen-R8zbiJWv.js",
+    "file": "assets/offscreen-DsD_dx6L.js",
     "name": "offscreen",
     "src": "src/offscreen/offscreen.html",
     "isEntry": true,
@@ -63,13 +63,13 @@
     ]
   },
   "src/popup/popup.html": {
-    "file": "assets/popup.html--kRMLj-t.js",
+    "file": "assets/popup.html-C25U1dYI.js",
     "name": "popup.html",
     "src": "src/popup/popup.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_index-PhIyDHzK.js",
+      "_index-BFdlunO7.js",
       "_ResultView-BUyCCZRO.js"
     ]
   }
