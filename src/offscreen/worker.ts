@@ -10,6 +10,7 @@ import * as ort from 'onnxruntime-web';
 
 // Constants (must match Python training script)
 const IMAGE_SIZE = 128;
+const HEATMAP_SIZE = 32; // Output heatmap resolution
 
 // Laplacian kernel (3x3)
 const LAPLACIAN_KERNEL = [
@@ -144,9 +145,49 @@ function normalize(data: Float32Array): Float32Array {
 }
 
 /**
- * Process image through the feature extraction pipeline
+ * Generate 32x32 heatmap from gradient data showing high-variance regions
  */
-async function extractFeatures(imageUrl: string): Promise<Float32Array> {
+function generateHeatmapData(gradient: Float32Array): number[] {
+    const heatmap: number[] = [];
+    const blockSize = IMAGE_SIZE / HEATMAP_SIZE; // 4x4 blocks
+
+    // Calculate local variance for each block
+    for (let by = 0; by < HEATMAP_SIZE; by++) {
+        for (let bx = 0; bx < HEATMAP_SIZE; bx++) {
+            let sum = 0;
+            let sumSq = 0;
+            let count = 0;
+
+            // Sample pixels in this block
+            for (let dy = 0; dy < blockSize; dy++) {
+                for (let dx = 0; dx < blockSize; dx++) {
+                    const x = bx * blockSize + dx;
+                    const y = by * blockSize + dy;
+                    const idx = y * IMAGE_SIZE + x;
+                    const val = gradient[idx];
+                    sum += val;
+                    sumSq += val * val;
+                    count++;
+                }
+            }
+
+            // Variance = E[X²] - E[X]²
+            const mean = sum / count;
+            const variance = sumSq / count - mean * mean;
+            heatmap.push(variance);
+        }
+    }
+
+    // Normalize to 0-1 range
+    const max = Math.max(...heatmap, 1);
+    return heatmap.map(v => v / max);
+}
+
+/**
+ * Process image through the feature extraction pipeline
+ * Returns both normalized features and raw gradient for heatmap
+ */
+async function extractFeatures(imageUrl: string): Promise<{ features: Float32Array; gradient: Float32Array }> {
     // Fetch and decode image
     const bitmap = await fetchImage(imageUrl);
 
@@ -175,9 +216,9 @@ async function extractFeatures(imageUrl: string): Promise<Float32Array> {
     const gradient = calculateGradientMagnitude(laplacian, IMAGE_SIZE, IMAGE_SIZE);
 
     // Normalize to 0-255
-    const normalized = normalize(gradient);
+    const features = normalize(gradient);
 
-    return normalized;
+    return { features, gradient };
 }
 
 /**
@@ -245,16 +286,17 @@ async function runInference(features: Float32Array): Promise<{ isAI: boolean; co
 }
 
 /**
- * Main analysis function
+ * Main analysis function - returns result with heatmap data
  */
-async function analyzeImage(url: string): Promise<{ isAI: boolean; confidence: number }> {
+async function analyzeImage(url: string): Promise<{ isAI: boolean; confidence: number; heatmapData: number[] }> {
     console.log('[UnDiffused] Analyzing:', url);
 
-    const features = await extractFeatures(url);
+    const { features, gradient } = await extractFeatures(url);
     const result = await runInference(features);
+    const heatmapData = generateHeatmapData(gradient);
 
-    console.log('[UnDiffused] Result:', result);
-    return result;
+    console.log('[UnDiffused] Result:', result, 'Heatmap points:', heatmapData.length);
+    return { ...result, heatmapData };
 }
 
 // Message listener

@@ -10,19 +10,19 @@
     "src": "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm"
   },
   "src/background/main.ts": {
-    "file": "assets/main.ts-DjM1lemV.js",
+    "file": "assets/main.ts-CVOdTUe2.js",
     "name": "main.ts",
     "src": "src/background/main.ts",
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-CwXK9DSH.js",
+    "file": "assets/index.tsx-CTXPyBih.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true
   },
   "src/offscreen/offscreen.html": {
-    "file": "assets/offscreen-DqEMEqLR.js",
+    "file": "assets/offscreen-D2uJ-Isu.js",
     "name": "offscreen",
     "src": "src/offscreen/offscreen.html",
     "isEntry": true,

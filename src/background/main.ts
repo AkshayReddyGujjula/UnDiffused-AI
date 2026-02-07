@@ -38,7 +38,7 @@ async function ensureOffscreenDocument(): Promise<void> {
 /**
  * Analyze image via offscreen document
  */
-async function analyzeImage(imageUrl: string): Promise<{ isAI: boolean; confidence: number }> {
+async function analyzeImage(imageUrl: string): Promise<{ isAI: boolean; confidence: number; heatmapData: number[] }> {
     await ensureOffscreenDocument();
 
     return new Promise((resolve, reject) => {
@@ -51,7 +51,7 @@ async function analyzeImage(imageUrl: string): Promise<{ isAI: boolean; confiden
                 }
 
                 if (response?.success) {
-                    resolve({ isAI: response.isAI, confidence: response.confidence });
+                    resolve({ isAI: response.isAI, confidence: response.confidence, heatmapData: response.heatmapData || [] });
                 } else {
                     reject(new Error(response?.error || 'Analysis failed'));
                 }
@@ -63,7 +63,7 @@ async function analyzeImage(imageUrl: string): Promise<{ isAI: boolean; confiden
 /**
  * Send result to content script
  */
-async function sendResultToTab(tabId: number, imageUrl: string, result: { isAI: boolean; confidence: number }): Promise<void> {
+async function sendResultToTab(tabId: number, imageUrl: string, result: { isAI: boolean; confidence: number; heatmapData: number[] }): Promise<void> {
     try {
         await chrome.tabs.sendMessage(tabId, {
             type: 'SHOW_RESULT',
@@ -87,22 +87,41 @@ async function handleContextMenuClick(
 
     console.log('[UnDiffused] Scanning:', info.srcUrl);
 
-    // Notify content script to show scanning state
-    await chrome.tabs.sendMessage(tab.id, {
-        type: 'SCANNING',
-        imageUrl: info.srcUrl
-    });
+    const tabId = tab.id;
+
+    // Notify content script to show scanning state (don't block on this)
+    try {
+        await chrome.tabs.sendMessage(tabId, {
+            type: 'SCANNING',
+            imageUrl: info.srcUrl
+        });
+    } catch (e) {
+        console.warn('[UnDiffused] Could not notify content script of scanning state:', e);
+        // Continue anyway - the content script might not be ready yet
+    }
 
     try {
         const result = await analyzeImage(info.srcUrl);
-        await sendResultToTab(tab.id, info.srcUrl, result);
+
+        // Try to send result to content script
+        try {
+            await sendResultToTab(tabId, info.srcUrl, result);
+        } catch (e) {
+            console.warn('[UnDiffused] Could not send result to content script:', e);
+            // Show result via notification as fallback
+            console.log('[UnDiffused] Result:', result.isAI ? 'AI-GENERATED' : 'REAL', result.confidence + '%');
+        }
     } catch (error) {
         console.error('[UnDiffused] Analysis failed:', error);
-        await chrome.tabs.sendMessage(tab.id, {
-            type: 'ERROR',
-            imageUrl: info.srcUrl,
-            error: error instanceof Error ? error.message : 'Unknown error'
-        });
+        try {
+            await chrome.tabs.sendMessage(tabId, {
+                type: 'ERROR',
+                imageUrl: info.srcUrl,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+        } catch (e) {
+            console.warn('[UnDiffused] Could not send error to content script:', e);
+        }
     }
 }
 

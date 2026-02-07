@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GlassCard } from '../components/GlassCard';
 
 type ScanState = 'idle' | 'scanning' | 'result' | 'error';
@@ -6,7 +6,58 @@ type ScanState = 'idle' | 'scanning' | 'result' | 'error';
 interface ScanResult {
     isAI: boolean;
     confidence: number;
+    heatmapData?: number[];
 }
+
+const HEATMAP_SIZE = 32;
+
+/**
+ * HeatmapCanvas - Renders gradient variance as red-transparent overlay
+ */
+const HeatmapCanvas: React.FC<{ data: number[] }> = ({ data }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    const drawHeatmap = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas || data.length !== HEATMAP_SIZE * HEATMAP_SIZE) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+
+        const cellW = canvas.width / HEATMAP_SIZE;
+        const cellH = canvas.height / HEATMAP_SIZE;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (let y = 0; y < HEATMAP_SIZE; y++) {
+            for (let x = 0; x < HEATMAP_SIZE; x++) {
+                const value = data[y * HEATMAP_SIZE + x];
+                // High values = more red, low values = transparent
+                const alpha = Math.pow(value, 0.7) * 0.75; // Soften curve
+                ctx.fillStyle = `rgba(239, 68, 68, ${alpha})`;
+                ctx.fillRect(x * cellW, y * cellH, cellW + 1, cellH + 1);
+            }
+        }
+    }, [data]);
+
+    useEffect(() => {
+        drawHeatmap();
+        window.addEventListener('resize', drawHeatmap);
+        return () => window.removeEventListener('resize', drawHeatmap);
+    }, [drawHeatmap]);
+
+    return (
+        <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full"
+            style={{ mixBlendMode: 'multiply' }}
+        />
+    );
+};
 
 /**
  * Scanner Component
@@ -23,6 +74,7 @@ export const Scanner: React.FC = () => {
     const [result, setResult] = useState<ScanResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [targetImage, setTargetImage] = useState<string | null>(null);
+    const [showHeatmap, setShowHeatmap] = useState(false);
 
     useEffect(() => {
         const handleMessage = (message: {
@@ -30,6 +82,7 @@ export const Scanner: React.FC = () => {
             imageUrl?: string;
             isAI?: boolean;
             confidence?: number;
+            heatmapData?: number[];
             error?: string;
         }) => {
             switch (message.type) {
@@ -43,7 +96,8 @@ export const Scanner: React.FC = () => {
                     setState('result');
                     setResult({
                         isAI: message.isAI || false,
-                        confidence: message.confidence || 0
+                        confidence: message.confidence || 0,
+                        heatmapData: message.heatmapData
                     });
                     break;
                 case 'ERROR':
@@ -65,7 +119,8 @@ export const Scanner: React.FC = () => {
                 setResult(null);
                 setError(null);
                 setTargetImage(null);
-            }, 5000);
+                setShowHeatmap(false);
+            }, 8000); // Extended to 8s so user can view heatmap
             return () => clearTimeout(timer);
         }
     }, [state]);
@@ -146,6 +201,37 @@ export const Scanner: React.FC = () => {
                                 />
                             </div>
                         </div>
+
+                        {/* Image Preview with Heatmap */}
+                        {targetImage && result.heatmapData && (
+                            <div className="relative mt-4 rounded-xl overflow-hidden border border-white/10">
+                                <img
+                                    src={targetImage}
+                                    alt="Analyzed"
+                                    className="w-full h-32 object-cover"
+                                />
+                                {/* Heatmap Overlay */}
+                                <div
+                                    className={`absolute inset-0 transition-opacity duration-300 pointer-events-none ${showHeatmap ? 'opacity-100' : 'opacity-0'
+                                        }`}
+                                >
+                                    <HeatmapCanvas data={result.heatmapData} />
+                                </div>
+                                {/* Heatmap Toggle Button */}
+                                <button
+                                    onClick={() => setShowHeatmap(!showHeatmap)}
+                                    className={`absolute top-2 right-2 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all duration-200 hover:scale-105 ${showHeatmap
+                                        ? 'bg-red-500/80 text-white shadow-[0_0_12px_rgba(239,68,68,0.5)] border border-red-400/50'
+                                        : 'bg-black/50 text-white/70 hover:bg-black/70 border border-white/10'
+                                        }`}
+                                >
+                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" />
+                                    </svg>
+                                    {showHeatmap ? 'Hide' : 'Heatmap'}
+                                </button>
+                            </div>
+                        )}
 
                         {/* Privacy Notice */}
                         <p className="mt-4 text-[10px] text-white/30 tracking-wide">
