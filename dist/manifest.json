@@ -16,6 +16,9 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "action": {
+    "default_popup": "src/popup/popup.html"
+  },
   "background": {
     "service_worker": "service-worker-loader.js",
     "type": "module"
@@ -23,7 +26,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.tsx-DvgyRi8d.js"
+        "assets/index.tsx-loader-CcRDqYKy.js"
       ],
       "matches": [
         "<all_urls>"
@@ -40,7 +43,8 @@
         "<all_urls>"
       ],
       "resources": [
-        "assets/index.tsx-DvgyRi8d.js"
+        "assets/ResultView-BUyCCZRO.js",
+        "assets/index.tsx-ByR3lM1B.js"
       ],
       "use_dynamic_url": false
     }

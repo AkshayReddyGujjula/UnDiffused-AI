@@ -289,15 +289,19 @@ async function runInference(features: Float32Array): Promise<{ isAI: boolean; co
 /**
  * Main analysis function - returns result with heatmap data
  */
-async function analyzeImage(url: string): Promise<{ isAI: boolean; confidence: number; heatmapData: number[] }> {
+async function analyzeImage(url: string): Promise<{ isAI: boolean; confidence: number; heatmapData: number[]; filterData: number[] }> {
     console.log('[UnDiffused] Analyzing:', url);
 
     const { features, gradient } = await extractFeatures(url);
     const result = await runInference(features);
     const heatmapData = generateHeatmapData(gradient);
 
+    // Convert float array to regular array for message passing
+    // Subsample slightly or send full 128x128? 128x128 is 16k values, totally fine.
+    const filterData = Array.from(features);
+
     console.log('[UnDiffused] Result:', result, 'Heatmap points:', heatmapData.length);
-    return { ...result, heatmapData };
+    return { ...result, heatmapData, filterData };
 }
 
 // Message listener

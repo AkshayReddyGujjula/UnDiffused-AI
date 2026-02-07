@@ -38,7 +38,7 @@ async function ensureOffscreenDocument(): Promise<void> {
 /**
  * Analyze image via offscreen document
  */
-async function analyzeImage(imageUrl: string): Promise<{ isAI: boolean; confidence: number; heatmapData: number[] }> {
+async function analyzeImage(imageUrl: string): Promise<{ isAI: boolean; confidence: number; heatmapData: number[]; filterData: number[] }> {
     await ensureOffscreenDocument();
 
     return new Promise((resolve, reject) => {
@@ -51,7 +51,12 @@ async function analyzeImage(imageUrl: string): Promise<{ isAI: boolean; confiden
                 }
 
                 if (response?.success) {
-                    resolve({ isAI: response.isAI, confidence: response.confidence, heatmapData: response.heatmapData || [] });
+                    resolve({
+                        isAI: response.isAI,
+                        confidence: response.confidence,
+                        heatmapData: response.heatmapData || [],
+                        filterData: response.filterData || []
+                    });
                 } else {
                     reject(new Error(response?.error || 'Analysis failed'));
                 }
@@ -63,7 +68,7 @@ async function analyzeImage(imageUrl: string): Promise<{ isAI: boolean; confiden
 /**
  * Send result to content script
  */
-async function sendResultToTab(tabId: number, imageUrl: string, result: { isAI: boolean; confidence: number; heatmapData: number[] }): Promise<void> {
+async function sendResultToTab(tabId: number, imageUrl: string, result: { isAI: boolean; confidence: number; heatmapData: number[]; filterData: number[] }): Promise<void> {
     try {
         await chrome.tabs.sendMessage(tabId, {
             type: 'SHOW_RESULT',
@@ -138,5 +143,22 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Listen for context menu clicks
 chrome.contextMenus.onClicked.addListener(handleContextMenuClick);
+
+// Listen for messages from popup
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message.type === 'REQUEST_ANALYSIS') {
+        analyzeImage(message.url || '')
+            .then(result => {
+                sendResponse({ success: true, ...result });
+            })
+            .catch(error => {
+                console.error('[UnDiffused] Analysis error:', error);
+                sendResponse({ success: false, error: error.message });
+            });
+
+        // Return true to indicate async response
+        return true;
+    }
+});
 
 console.log('[UnDiffused] Background service worker ready');

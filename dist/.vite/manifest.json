@@ -1,33 +1,76 @@
 {
   "../../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-gJBewjfu.js",
+    "file": "assets/crx-manifest.js-CYngDCFz.js",
     "name": "crx-manifest.js",
     "src": "../../../../../../@crx/manifest",
     "isEntry": true
+  },
+  "_ResultView-BUyCCZRO.js": {
+    "file": "assets/ResultView-BUyCCZRO.js",
+    "name": "ResultView"
+  },
+  "_index-Bt3_gI9e.css": {
+    "file": "assets/index-Bt3_gI9e.css",
+    "src": "_index-Bt3_gI9e.css"
+  },
+  "_index-PhIyDHzK.js": {
+    "file": "assets/index-PhIyDHzK.js",
+    "name": "index",
+    "imports": [
+      "_ResultView-BUyCCZRO.js"
+    ],
+    "css": [
+      "assets/index-Bt3_gI9e.css"
+    ]
+  },
+  "_index.tsx-loader-CcRDqYKy.js": {
+    "file": "assets/index.tsx-loader-CcRDqYKy.js",
+    "src": "_index.tsx-loader-CcRDqYKy.js"
+  },
+  "_modulepreload-polyfill-B5Qt9EMX.js": {
+    "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
+    "name": "modulepreload-polyfill"
   },
   "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm": {
     "file": "assets/ort-wasm-simd-threaded.jsep-6MnTkKum.wasm",
     "src": "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm"
   },
   "src/background/main.ts": {
-    "file": "assets/main.ts-CVOdTUe2.js",
+    "file": "assets/main.ts-nI1D5hg6.js",
     "name": "main.ts",
     "src": "src/background/main.ts",
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-DvgyRi8d.js",
+    "file": "assets/index.tsx-ByR3lM1B.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
-    "isEntry": true
+    "isEntry": true,
+    "imports": [
+      "_ResultView-BUyCCZRO.js"
+    ]
   },
   "src/offscreen/offscreen.html": {
-    "file": "assets/offscreen-iP2XfbPJ.js",
+    "file": "assets/offscreen-R8zbiJWv.js",
     "name": "offscreen",
     "src": "src/offscreen/offscreen.html",
     "isEntry": true,
+    "imports": [
+      "_modulepreload-polyfill-B5Qt9EMX.js"
+    ],
     "assets": [
       "assets/ort-wasm-simd-threaded.jsep-6MnTkKum.wasm"
+    ]
+  },
+  "src/popup/popup.html": {
+    "file": "assets/popup.html--kRMLj-t.js",
+    "name": "popup.html",
+    "src": "src/popup/popup.html",
+    "isEntry": true,
+    "imports": [
+      "_modulepreload-polyfill-B5Qt9EMX.js",
+      "_index-PhIyDHzK.js",
+      "_ResultView-BUyCCZRO.js"
     ]
   }
 }
