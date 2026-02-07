@@ -1,0 +1,6 @@
+numpy
+opencv-python
+scikit-learn
+skl2onnx
+onnx
+pathlib
