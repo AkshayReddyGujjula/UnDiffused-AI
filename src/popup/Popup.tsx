@@ -98,8 +98,8 @@ export const Popup: React.FC = () => {
     };
 
     return (
-        <div className="w-[320px] h-auto min-h-[400px] flex flex-col bg-gray-900 text-white overflow-hidden p-4">
-            <GlassCard className="flex-1 relative overflow-hidden flex flex-col p-4">
+        <div className="w-[320px] h-auto min-h-[400px] flex flex-col bg-[#0d1117] bg-gradient-to-b from-[#1a1c22] to-[#0d1117] text-white p-2">
+            <GlassCard className="flex-1 relative flex flex-col px-4 pt-2 pb-4">
                 {/* Header */}
                 <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/30 to-purple-500/30 flex items-center justify-center border border-white/10">
@@ -108,17 +108,17 @@ export const Popup: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                     </div>
-                    <div className="flex-1">
-                        <h2 className="text-lg font-semibold">UnDiffused</h2>
-                        <p className="text-xs text-white/50 tracking-wider uppercase">AI Image Detector</p>
+                    <div className="flex-1 flex flex-col justify-center translate-y-[-0.5px]">
+                        <h2 className="text-lg font-semibold leading-none m-0 tracking-tight">UnDiffused</h2>
+                        <p className="text-[9px] text-white/40 tracking-[0.2em] uppercase mt-[3px] leading-none">AI Image Detector</p>
                     </div>
                     {state !== 'idle' && (
                         <button
                             onClick={handleClose}
-                            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover:scale-110 border border-white/10"
+                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all duration-300 hover:rotate-90 border border-white/5 active:scale-95 shadow-lg z-50 backdrop-blur-md"
                             aria-label="Close"
                         >
-                            <svg className="w-4 h-4 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="w-3.5 h-3.5 text-white opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
@@ -162,11 +162,11 @@ export const Popup: React.FC = () => {
                 {state === 'analyzing' && (
                     <div className="flex-1 flex flex-col items-center justify-center">
                         {targetImage && (
-                            <div className="relative mb-6 rounded-xl overflow-hidden border border-white/10 w-full aspect-square">
+                            <div className="relative mb-6 rounded-xl overflow-hidden border border-white/10 w-full min-h-[200px] bg-black/20">
                                 <img
                                     src={targetImage}
                                     alt="Scanning"
-                                    className="w-full h-full object-cover opacity-50"
+                                    className="w-full h-auto max-h-[300px] object-contain opacity-50 block"
                                 />
                                 {/* Laser Scanner Effect */}
                                 <div className="absolute inset-0">

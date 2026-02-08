@@ -1,31 +1,31 @@
 {
-  "../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-D4ln-aHE.js",
+  "../../../../../../@crx/manifest": {
+    "file": "assets/crx-manifest.js-Co7RaNQc.js",
     "name": "crx-manifest.js",
-    "src": "../../../../../@crx/manifest",
+    "src": "../../../../../../@crx/manifest",
     "isEntry": true
   },
-  "_ResultView-BUyCCZRO.js": {
-    "file": "assets/ResultView-BUyCCZRO.js",
+  "_ResultView-KbLL5_eE.js": {
+    "file": "assets/ResultView-KbLL5_eE.js",
     "name": "ResultView"
   },
-  "_index-B7JJQUdQ.css": {
-    "file": "assets/index-B7JJQUdQ.css",
-    "src": "_index-B7JJQUdQ.css"
-  },
-  "_index-BFdlunO7.js": {
-    "file": "assets/index-BFdlunO7.js",
+  "_index-BFytIqUk.js": {
+    "file": "assets/index-BFytIqUk.js",
     "name": "index",
     "imports": [
-      "_ResultView-BUyCCZRO.js"
+      "_ResultView-KbLL5_eE.js"
     ],
     "css": [
-      "assets/index-B7JJQUdQ.css"
+      "assets/index-nRBytN_6.css"
     ]
   },
-  "_index.tsx-loader-RESjUv0a.js": {
-    "file": "assets/index.tsx-loader-RESjUv0a.js",
-    "src": "_index.tsx-loader-RESjUv0a.js"
+  "_index-nRBytN_6.css": {
+    "file": "assets/index-nRBytN_6.css",
+    "src": "_index-nRBytN_6.css"
+  },
+  "_index.tsx-loader-DTe-ID3T.js": {
+    "file": "assets/index.tsx-loader-DTe-ID3T.js",
+    "src": "_index.tsx-loader-DTe-ID3T.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -42,16 +42,16 @@
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-CDA2YO5D.js",
+    "file": "assets/index.tsx-C9QxuETW.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,
     "imports": [
-      "_ResultView-BUyCCZRO.js"
+      "_ResultView-KbLL5_eE.js"
     ]
   },
   "src/offscreen/offscreen.html": {
-    "file": "assets/offscreen-DsD_dx6L.js",
+    "file": "assets/offscreen-Be2CxsO9.js",
     "name": "offscreen",
     "src": "src/offscreen/offscreen.html",
     "isEntry": true,
@@ -63,14 +63,14 @@
     ]
   },
   "src/popup/popup.html": {
-    "file": "assets/popup.html-C25U1dYI.js",
+    "file": "assets/popup.html-B7M-u-zw.js",
     "name": "popup.html",
     "src": "src/popup/popup.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_index-BFdlunO7.js",
-      "_ResultView-BUyCCZRO.js"
+      "_index-BFytIqUk.js",
+      "_ResultView-KbLL5_eE.js"
     ]
   }
 }

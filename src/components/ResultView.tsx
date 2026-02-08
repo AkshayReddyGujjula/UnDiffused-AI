@@ -39,9 +39,9 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
             {/* Confidence Bar */}
             <div className="space-y-2">
-                <div className="flex justify-between text-xs text-white/50">
-                    <span>Confidence</span>
-                    <span>{result.confidence}%</span>
+                <div className="flex justify-between text-xs">
+                    <span className="text-white opacity-100 font-medium">Confidence</span>
+                    <span className="text-white/50">{result.confidence}%</span>
                 </div>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                     <div
@@ -55,11 +55,11 @@ export const ResultView: React.FC<ResultViewProps> = ({
             {/* Image Preview with Overlays */}
             {targetImage && (
                 <div className="mt-4">
-                    <div className="relative rounded-xl overflow-hidden border border-white/10">
+                    <div className="relative rounded-xl overflow-hidden border border-white/10 bg-black/20">
                         <img
                             src={targetImage}
                             alt="Analyzed"
-                            className="w-full h-40 object-cover"
+                            className="w-full h-auto max-h-[400px] object-contain block"
                         />
 
                         {/* Heatmap Overlay */}
