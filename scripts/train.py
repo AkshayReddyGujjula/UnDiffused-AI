@@ -98,6 +98,7 @@ def train():
     parser.add_argument('--test', action='store_true', help='Run quickly on small subset')
     parser.add_argument('--workers', type=int, default=4, help='Number of data loading workers')
     parser.add_argument('--batch-size', type=int, default=DEFAULT_BATCH_SIZE, help='Batch size')
+    parser.add_argument('--resume', action='store_true', help='Resume from best_model.pth')
     args = parser.parse_args()
 
     # Optimization: Use cuDNN benchmark
@@ -161,6 +162,15 @@ def train():
     )
     
     model = get_model().to(device)
+    
+    # Resume Logic
+    start_epoch = 0
+    if args.resume and os.path.exists('best_model.pth'):
+        print(f"[INFO] Resuming training from best_model.pth...")
+        model.load_state_dict(torch.load('best_model.pth', weights_only=True))
+        # Note: In a professional setup, we'd also save/load optimizer state, 
+        # but for fine-tuning ResNet, loading weights is sufficient to resume.
+        
     # BCEWithLogitsLoss is mathematically more stable than Sigmoid + BCELoss
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-2)
@@ -176,7 +186,7 @@ def train():
     patience_counter = 0
     
     # Main Epoch Loop
-    epoch_pbar = tqdm(range(EPOCHS), desc="Total Progress")
+    epoch_pbar = tqdm(range(start_epoch, EPOCHS), desc="Total Progress")
     for epoch in epoch_pbar:
         # 1. Training Phase
         model.train()
