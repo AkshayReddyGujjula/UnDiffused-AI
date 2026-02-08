@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 
-const FILTER_SIZE = 128;
+const FILTER_SIZE = 224;
 
 /**
  * FilterCanvas - Renders high-pass filter data (features) as grayscale overlay
