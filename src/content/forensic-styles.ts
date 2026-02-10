@@ -144,6 +144,7 @@ const FORENSIC_STYLES = `
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+    align-items: start; /* Prevent cards from stretching to match row height */
     max-height: 50vh;
     overflow-y: auto;
     padding-right: 4px;
@@ -307,24 +308,38 @@ const FORENSIC_STYLES = `
 
 .tool-slider {
     width: 100%;
-    height: 4px;
+    height: 6px; /* Slightly thicker */
     -webkit-appearance: none;
     appearance: none;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.2); /* More opaque track */
+    border-radius: 999px;
     outline: none;
     cursor: pointer;
+    overflow: visible;
 }
 
 .tool-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #38bdf8, #10b981);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(56, 189, 248, 0.4);
+    background: #fff;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    cursor: grab;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+
+.tool-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.tool-slider:active::-webkit-slider-thumb {
+    transform: scale(1.25);
+    cursor: grabbing;
+    background: #3b82f6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
 }
 
 .tool-select {
@@ -353,23 +368,27 @@ const FORENSIC_STYLES = `
 /* Primary liquid analyse button */
 .tool-analyse-btn {
     width: 100%;
-    padding: 10px 16px;
-    border-radius: 10px;
+    padding: 12px 16px;
+    border-radius: 12px;
     border: none;
-    background: linear-gradient(135deg, #38bdf8 0%, #10b981 100%);
+    /* Dark blue / Purple gradient */
+    background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
     color: #fff;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700; /* Bolder text */
+    letter-spacing: 0.02em;
     cursor: pointer;
     transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     position: relative;
     overflow: hidden;
     font-family: inherit;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
 }
 
 .tool-analyse-btn:hover {
-    transform: translateY(-1px) scale(1.02);
-    box-shadow: 0 8px 24px rgba(56, 189, 248, 0.35);
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 8px 20px rgba(147, 51, 234, 0.4);
+    filter: brightness(1.1);
 }
 
 .tool-analyse-btn:active {
