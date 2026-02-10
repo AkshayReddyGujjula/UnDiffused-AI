@@ -98,8 +98,8 @@ export const Popup: React.FC = () => {
     };
 
     return (
-        <div className="w-[320px] h-auto min-h-[400px] flex flex-col bg-[#0d1117] bg-gradient-to-b from-[#1a1c22] to-[#0d1117] text-white p-2">
-            <GlassCard className="flex-1 relative flex flex-col px-4 pt-2 pb-4">
+        <div className="w-[320px] h-auto min-h-[400px] flex flex-col bg-[#0d1117] bg-gradient-to-b from-[#1a1c22] to-[#0d1117] text-white p-4">
+            <GlassCard className="flex-1 relative flex flex-col p-4 pt-4">
                 {/* Header */}
                 <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/30 to-purple-500/30 flex items-center justify-center border border-white/10">
@@ -108,9 +108,8 @@ export const Popup: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                     </div>
-                    <div className="flex-1 flex flex-col justify-center translate-y-[-0.5px]">
-                        <h2 className="text-lg font-semibold leading-none m-0 tracking-tight">UnDiffused</h2>
-                        <p className="text-[9px] text-white/40 tracking-[0.2em] uppercase mt-[3px] leading-none">AI Image Detector</p>
+                    <div className="flex flex-col justify-center">
+                        <h2 className="text-lg font-semibold leading-tight m-0">UnDiffused</h2>
                     </div>
                     {state !== 'idle' && (
                         <button
