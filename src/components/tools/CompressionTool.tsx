@@ -7,6 +7,7 @@ export const CompressionTool: React.FC<CompressionToolProps> = ({ targetImage })
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [stats, setStats] = useState<{ quality: number; layers: number; inconsistent: number } | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true); setStats(null);
@@ -39,10 +40,8 @@ export const CompressionTool: React.FC<CompressionToolProps> = ({ targetImage })
             let incon = 0; for (const q of bq) if (Math.abs(q - mean) > std * 2) incon++;
             const quality = Math.max(10, Math.min(100, 100 - mean * 2));
             const layers = incon > bx * by * 0.1 ? 2 : 1;
-            setStats({ quality, layers, inconsistent: incon });
-
-            const canvas = canvasRef.current!; canvas.width = w; canvas.height = h;
-            const ctx = canvas.getContext('2d')!; ctx.drawImage(img, 0, 0);
+            const resultCanvas = document.createElement('canvas'); resultCanvas.width = w; resultCanvas.height = h;
+            const ctx = resultCanvas.getContext('2d')!; ctx.drawImage(img, 0, 0);
             const maxQ = Math.max(...bq);
             for (let iy = 0; iy < by; iy++) for (let ix = 0; ix < bx; ix++) {
                 const n = maxQ > 0 ? bq[iy * bx + ix] / maxQ : 0;
@@ -52,8 +51,23 @@ export const CompressionTool: React.FC<CompressionToolProps> = ({ targetImage })
                 ctx.fillRect(ix * bs, iy * bs, bs, bs);
                 if (showGrid) { ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 0.5; ctx.strokeRect(ix * bs, iy * bs, bs, bs); }
             }
+
+            resultRef.current = resultCanvas;
+            setStats({ quality, layers, inconsistent: incon });
         } catch (e) { console.error('[Compression]', e); } finally { setIsAnalysing(false); }
     }, [targetImage, showGrid]);
+
+    // Draw result
+    React.useEffect(() => {
+        if (stats && resultRef.current && canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            if (ctx) {
+                canvasRef.current.width = resultRef.current.width;
+                canvasRef.current.height = resultRef.current.height;
+                ctx.drawImage(resultRef.current, 0, 0);
+            }
+        }
+    }, [stats]);
 
     return (<div>
         <div className="tool-control-group">

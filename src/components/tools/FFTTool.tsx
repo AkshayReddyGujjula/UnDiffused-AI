@@ -15,6 +15,7 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage }) => {
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [stats, setStats] = useState<{ highFreq: number; lowFreq: number; gridArtifacts: boolean } | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     // Simple 1D FFT (Cooley-Tukey, radix-2)
     const fft1d = (realIn: Float64Array, imagIn: Float64Array): [Float64Array, Float64Array] => {
@@ -164,9 +165,8 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage }) => {
 
             setStats({ highFreq: highPct, lowFreq: lowPct, gridArtifacts: gridScore > 3 });
 
-            // Render spectrum
-            const canvas = canvasRef.current;
-            if (!canvas) return;
+            // Store result in ref for rendering
+            const canvas = document.createElement('canvas');
             canvas.width = size;
             canvas.height = size;
             const ctx = canvas.getContext('2d')!;
@@ -192,12 +192,28 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage }) => {
                 ctx.arc(center, center, r, 0, Math.PI * 2);
                 ctx.stroke();
             }
+
+            resultRef.current = canvas;
+            setStats({ highFreq: highPct, lowFreq: lowPct, gridArtifacts: gridScore > 3 });
+
         } catch (err) {
             console.error('[FFT] Analysis failed:', err);
         } finally {
             setIsAnalysing(false);
         }
     }, [targetImage, scale]);
+
+    // Draw result when stats change (component re-renders with canvas)
+    React.useEffect(() => {
+        if (stats && resultRef.current && canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            if (ctx) {
+                canvasRef.current.width = resultRef.current.width;
+                canvasRef.current.height = resultRef.current.height;
+                ctx.drawImage(resultRef.current, 0, 0);
+            }
+        }
+    }, [stats]);
 
     return (
         <div>

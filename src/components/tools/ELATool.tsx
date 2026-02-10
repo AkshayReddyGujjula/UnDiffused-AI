@@ -19,6 +19,8 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage }) => {
     const [opacity, setOpacity] = useState(100);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const originalRef = useRef<HTMLCanvasElement>(null);
+    const resultDataRef = useRef<HTMLCanvasElement | null>(null);
+    const originalDataRef = useRef<HTMLCanvasElement | null>(null);
 
     const sensitivityMultiplier = sensitivity === 'low' ? 10 : sensitivity === 'medium' ? 20 : 40;
 
@@ -40,8 +42,7 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage }) => {
             const h = img.naturalHeight;
 
             // Draw original
-            const origCanvas = originalRef.current;
-            if (!origCanvas) return;
+            const origCanvas = document.createElement('canvas');
             origCanvas.width = w;
             origCanvas.height = h;
             const origCtx = origCanvas.getContext('2d')!;
@@ -68,11 +69,10 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage }) => {
             const recompData = tempCtx.getImageData(0, 0, w, h);
 
             // Compute ELA difference
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d')!;
+            const resultCanvas = document.createElement('canvas');
+            resultCanvas.width = w;
+            resultCanvas.height = h;
+            const ctx = resultCanvas.getContext('2d')!;
             const outData = ctx.createImageData(w, h);
 
             for (let i = 0; i < originalData.data.length; i += 4) {
@@ -108,6 +108,11 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage }) => {
             }
 
             ctx.putImageData(outData, 0, 0);
+
+            // Store results
+            resultDataRef.current = resultCanvas;
+            originalDataRef.current = origCanvas; // Reuse the temp canvas we drew to earlier
+
             setHasResult(true);
         } catch (err) {
             console.error('[ELA] Analysis failed:', err);
@@ -115,6 +120,30 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage }) => {
             setIsAnalysing(false);
         }
     }, [targetImage, quality, sensitivityMultiplier]);
+
+    // Draw results when ready
+    React.useEffect(() => {
+        if (hasResult && resultDataRef.current && originalDataRef.current) {
+            // Draw result
+            if (canvasRef.current) {
+                const ctx = canvasRef.current.getContext('2d');
+                if (ctx) {
+                    canvasRef.current.width = resultDataRef.current.width;
+                    canvasRef.current.height = resultDataRef.current.height;
+                    ctx.drawImage(resultDataRef.current, 0, 0);
+                }
+            }
+            // Draw original
+            if (originalRef.current) {
+                const ctx = originalRef.current.getContext('2d');
+                if (ctx) {
+                    originalRef.current.width = originalDataRef.current.width;
+                    originalRef.current.height = originalDataRef.current.height;
+                    ctx.drawImage(originalDataRef.current, 0, 0);
+                }
+            }
+        }
+    }, [hasResult]);
 
     const exportResult = () => {
         const canvas = canvasRef.current;

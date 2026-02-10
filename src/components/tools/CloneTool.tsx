@@ -16,6 +16,7 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage }) => {
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [cloneCount, setCloneCount] = useState<number | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const hashBlock = (data: Uint8ClampedArray, w: number, bx: number, by: number, size: number): number => {
         let hash = 0;
@@ -106,12 +107,11 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage }) => {
                 }
             }
 
-            // Render
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d')!;
+            // Render to off-screen canvas
+            const resultCanvas = document.createElement('canvas');
+            resultCanvas.width = w;
+            resultCanvas.height = h;
+            const ctx = resultCanvas.getContext('2d')!;
             ctx.drawImage(img, 0, 0);
 
             // Draw clone pairs
@@ -145,6 +145,7 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage }) => {
                 ctx.globalAlpha = 1;
             });
 
+            resultRef.current = resultCanvas;
             setCloneCount(limitedPairs.length);
         } catch (err) {
             console.error('[Clone] Detection failed:', err);
@@ -152,6 +153,18 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage }) => {
             setIsAnalysing(false);
         }
     }, [targetImage, sensitivity, minRegion]);
+
+    // Draw result when cloneCount changes
+    React.useEffect(() => {
+        if (cloneCount !== null && resultRef.current && canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            if (ctx) {
+                canvasRef.current.width = resultRef.current.width;
+                canvasRef.current.height = resultRef.current.height;
+                ctx.drawImage(resultRef.current, 0, 0);
+            }
+        }
+    }, [cloneCount]);
 
     return (
         <div>

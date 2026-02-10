@@ -17,6 +17,7 @@ export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage }) => {
     const [progress, setProgress] = useState(0);
     const [stats, setStats] = useState<{ hasFingerprint: boolean; consistency: number; uniformity: number } | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
@@ -115,12 +116,11 @@ export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage }) => {
             setStats({ hasFingerprint, consistency, uniformity });
             setProgress(90);
 
-            // Render noise visualization
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d')!;
+            // Render noise visualization to off-screen canvas
+            const resultCanvas = document.createElement('canvas');
+            resultCanvas.width = w;
+            resultCanvas.height = h;
+            const ctx = resultCanvas.getContext('2d')!;
             const outData = ctx.createImageData(w, h);
 
             let minN = Infinity, maxN = -Infinity;
@@ -142,13 +142,29 @@ export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage }) => {
             }
 
             ctx.putImageData(outData, 0, 0);
+
+            resultRef.current = resultCanvas;
             setProgress(100);
+            setStats({ hasFingerprint, consistency, uniformity });
+
         } catch (err) {
             console.error('[PRNU] Analysis failed:', err);
         } finally {
             setIsAnalysing(false);
         }
     }, [targetImage, filterLevel]);
+
+    // Draw result
+    React.useEffect(() => {
+        if (stats && resultRef.current && canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            if (ctx) {
+                canvasRef.current.width = resultRef.current.width;
+                canvasRef.current.height = resultRef.current.height;
+                ctx.drawImage(resultRef.current, 0, 0);
+            }
+        }
+    }, [stats]);
 
     return (
         <div>

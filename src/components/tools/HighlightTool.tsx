@@ -15,6 +15,7 @@ export const HighlightTool: React.FC<HighlightToolProps> = ({ targetImage }) => 
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [stats, setStats] = useState<{ highlights: number; consistent: number; inconsistent: number } | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
@@ -108,12 +109,11 @@ export const HighlightTool: React.FC<HighlightToolProps> = ({ targetImage }) => 
 
             setStats({ highlights: highlights.length, consistent, inconsistent });
 
-            // Render
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d')!;
+            // Render to off-screen canvas
+            const resultCanvas = document.createElement('canvas');
+            resultCanvas.width = w;
+            resultCanvas.height = h;
+            const ctx = resultCanvas.getContext('2d')!;
             ctx.drawImage(img, 0, 0);
 
             highlights.forEach((hl, idx) => {
@@ -142,12 +142,27 @@ export const HighlightTool: React.FC<HighlightToolProps> = ({ targetImage }) => 
                     ctx.stroke();
                 }
             });
+
+            resultRef.current = resultCanvas;
+            setStats({ highlights: highlights.length, consistent, inconsistent });
         } catch (err) {
             console.error('[Highlight] Analysis failed:', err);
         } finally {
             setIsAnalysing(false);
         }
     }, [targetImage, sensitivity]);
+
+    // Draw result
+    React.useEffect(() => {
+        if (stats && resultRef.current && canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            if (ctx) {
+                canvasRef.current.width = resultRef.current.width;
+                canvasRef.current.height = resultRef.current.height;
+                ctx.drawImage(resultRef.current, 0, 0);
+            }
+        }
+    }, [stats]);
 
     return (
         <div>

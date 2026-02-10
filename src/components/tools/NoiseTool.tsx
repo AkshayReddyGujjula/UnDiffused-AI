@@ -17,6 +17,7 @@ export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage }) => {
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [stats, setStats] = useState<{ mean: number; std: number; uniformity: number } | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
@@ -95,12 +96,11 @@ export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage }) => {
 
             setStats({ mean: meanVar, std: stdVar, uniformity });
 
-            // Render heat map
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d')!;
+            // Render heat map to off-screen canvas
+            const resultCanvas = document.createElement('canvas');
+            resultCanvas.width = w;
+            resultCanvas.height = h;
+            const ctx = resultCanvas.getContext('2d')!;
 
             // Draw original dimmed
             ctx.globalAlpha = 0.3;
@@ -124,12 +124,27 @@ export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage }) => {
                     ctx.strokeRect(bx * blockSize, by * blockSize, blockSize, blockSize);
                 }
             }
+
+            resultRef.current = resultCanvas;
+            setStats({ mean: meanVar, std: stdVar, uniformity });
         } catch (err) {
             console.error('[Noise] Analysis failed:', err);
         } finally {
             setIsAnalysing(false);
         }
     }, [targetImage, noiseType, blockSize]);
+
+    // Draw result
+    React.useEffect(() => {
+        if (stats && resultRef.current && canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            if (ctx) {
+                canvasRef.current.width = resultRef.current.width;
+                canvasRef.current.height = resultRef.current.height;
+                ctx.drawImage(resultRef.current, 0, 0);
+            }
+        }
+    }, [stats]);
 
     return (
         <div>

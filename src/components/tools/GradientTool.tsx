@@ -19,6 +19,8 @@ export const GradientTool: React.FC<GradientToolProps> = ({ targetImage }) => {
     const [activeTab, setActiveTab] = useState(0);
     const edgeCanvasRef = useRef<HTMLCanvasElement>(null);
     const magCanvasRef = useRef<HTMLCanvasElement>(null);
+    const edgeRef = useRef<HTMLCanvasElement | null>(null);
+    const magRef = useRef<HTMLCanvasElement | null>(null);
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
@@ -120,8 +122,8 @@ export const GradientTool: React.FC<GradientToolProps> = ({ targetImage }) => {
                 uniformity
             });
 
-            // Render edge map
-            const edgeCanvas = edgeCanvasRef.current!;
+            // Render edge map to off-screen canvas
+            const edgeCanvas = document.createElement('canvas');
             edgeCanvas.width = w;
             edgeCanvas.height = h;
             const edgeCtx = edgeCanvas.getContext('2d')!;
@@ -133,8 +135,8 @@ export const GradientTool: React.FC<GradientToolProps> = ({ targetImage }) => {
             }
             edgeCtx.putImageData(edgeData, 0, 0);
 
-            // Render magnitude heat map
-            const magCanvas = magCanvasRef.current!;
+            // Render magnitude heat map to off-screen canvas
+            const magCanvas = document.createElement('canvas');
             magCanvas.width = w;
             magCanvas.height = h;
             const magCtx = magCanvas.getContext('2d')!;
@@ -164,12 +166,42 @@ export const GradientTool: React.FC<GradientToolProps> = ({ targetImage }) => {
                 magData.data[idx + 3] = 255;
             }
             magCtx.putImageData(magData, 0, 0);
+
+            edgeRef.current = edgeCanvas;
+            magRef.current = magCanvas;
+
+            setStats({
+                edgeDensity: (edgeCount / (w * h)) * 10000,
+                avgStrength: totalStrength / (w * h),
+                uniformity
+            });
         } catch (err) {
             console.error('[Gradient] Analysis failed:', err);
         } finally {
             setIsAnalysing(false);
         }
     }, [targetImage, detector, threshold]);
+
+    // Draw result when stats or activeTab changes
+    React.useEffect(() => {
+        if (stats) {
+            if (activeTab === 0 && edgeRef.current && edgeCanvasRef.current) {
+                const ctx = edgeCanvasRef.current.getContext('2d');
+                if (ctx) {
+                    edgeCanvasRef.current.width = edgeRef.current.width;
+                    edgeCanvasRef.current.height = edgeRef.current.height;
+                    ctx.drawImage(edgeRef.current, 0, 0);
+                }
+            } else if (activeTab === 1 && magRef.current && magCanvasRef.current) {
+                const ctx = magCanvasRef.current.getContext('2d');
+                if (ctx) {
+                    magCanvasRef.current.width = magRef.current.width;
+                    magCanvasRef.current.height = magRef.current.height;
+                    ctx.drawImage(magRef.current, 0, 0);
+                }
+            }
+        }
+    }, [stats, activeTab]);
 
     return (
         <div>

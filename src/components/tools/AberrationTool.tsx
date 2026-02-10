@@ -15,6 +15,7 @@ export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage }) =
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [stats, setStats] = useState<{ avgSeparation: number; detected: boolean; edgesAnalysed: number } | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
@@ -107,18 +108,11 @@ export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage }) =
             const avgSeparation = edges.length > 0 ? totalSeparation / Math.min(edges.length, 200) : 0;
             const detected = avgSeparation > 0.05;
 
-            setStats({
-                avgSeparation: avgSeparation * 100,
-                detected,
-                edgesAnalysed: Math.min(edges.length, 200)
-            });
-
-            // Render visualization
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d')!;
+            // Render visualization to off-screen canvas
+            const resultCanvas = document.createElement('canvas');
+            resultCanvas.width = w;
+            resultCanvas.height = h;
+            const ctx = resultCanvas.getContext('2d')!;
 
             // Show RGB channel separation
             const outData = ctx.createImageData(w, h);
@@ -139,12 +133,32 @@ export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage }) =
                 ctx.fillStyle = sep.sep > 0.05 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.5)';
                 ctx.fill();
             }
+
+            resultRef.current = resultCanvas;
+
+            setStats({
+                avgSeparation: avgSeparation * 100,
+                detected,
+                edgesAnalysed: Math.min(edges.length, 200)
+            });
         } catch (err) {
             console.error('[Aberration] Analysis failed:', err);
         } finally {
             setIsAnalysing(false);
         }
     }, [targetImage]);
+
+    // Draw result when stats change
+    React.useEffect(() => {
+        if (stats && resultRef.current && canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            if (ctx) {
+                canvasRef.current.width = resultRef.current.width;
+                canvasRef.current.height = resultRef.current.height;
+                ctx.drawImage(resultRef.current, 0, 0);
+            }
+        }
+    }, [stats]);
 
     return (
         <div>
