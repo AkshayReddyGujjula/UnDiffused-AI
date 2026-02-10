@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GlassCard } from '../components/GlassCard';
 import { ResultView, ScanResult } from '../components/ResultView';
+import { ForensicToolsPanel } from '../components/ForensicToolsPanel';
 
-type ScanState = 'idle' | 'scanning' | 'result' | 'error';
+type ScanState = 'idle' | 'scanning' | 'result' | 'tools' | 'error';
 
 /**
  * Scanner Component
@@ -138,7 +139,7 @@ export const Scanner: React.FC = () => {
                     transform: 'translate(-50%, -50%)'
                 }}
             >
-                <GlassCard className="relative overflow-hidden min-w-[320px] max-w-[400px] p-6 pt-6">
+                <GlassCard className={`relative overflow-hidden p-6 pt-6 transition-all duration-300 ${state === 'tools' ? 'min-w-[700px] max-w-[800px]' : 'min-w-[320px] max-w-[400px]'}`}>
 
                     {/* Drag Handle (Top 5% approx) */}
                     <div
@@ -206,6 +207,16 @@ export const Scanner: React.FC = () => {
                         <ResultView
                             result={result}
                             targetImage={targetImage}
+                            onToolsClick={() => setState('tools')}
+                        />
+                    )}
+
+                    {/* Tools State */}
+                    {state === 'tools' && targetImage && (
+                        <ForensicToolsPanel
+                            targetImage={targetImage}
+                            onBack={() => setState('result')}
+                            onClose={handleClose}
                         />
                     )}
 

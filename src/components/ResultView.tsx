@@ -10,11 +10,13 @@ export interface ScanResult {
 interface ResultViewProps {
     result: ScanResult;
     targetImage: string;
+    onToolsClick?: () => void;
 }
 
 export const ResultView: React.FC<ResultViewProps> = ({
     result,
-    targetImage
+    targetImage,
+    onToolsClick
 }) => {
     const [cursorPos, setCursorPos] = useState({ x: 50, y: 50 });
     const [toolsCursorPos, setToolsCursorPos] = useState({ x: 50, y: 50 });
@@ -168,8 +170,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
                 {/* Tools Button */}
                 <button
                     onClick={() => {
-                        // Tools functionality placeholder
-                        console.log('Tools clicked');
+                        if (onToolsClick) onToolsClick();
                     }}
                     onMouseMove={handleToolsMouseMove}
                     className="w-full py-2.5 px-4 rounded-xl border border-white/20 backdrop-blur-xl flex items-center justify-center gap-3 group shadow-lg hover:scale-[1.05] hover:z-20 transition-all duration-300 relative overflow-hidden"
