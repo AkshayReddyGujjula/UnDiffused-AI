@@ -15,6 +15,7 @@ interface ForensicToolsPanelProps {
     targetImage: string;
     onBack: () => void;
     onClose: () => void;
+    onMaximize: (image: string, title: string) => void;
 }
 
 const TOOLS = [
@@ -30,17 +31,17 @@ const TOOLS = [
     { icon: '📋', title: 'Metadata & EXIF', desc: 'Extracts hidden image data', tier: 2 as const, Component: MetadataTool },
 ];
 
-export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetImage, onBack, onClose }) => {
+export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetImage, onBack, onClose, onMaximize }) => {
     const [analyzedImage, setAnalyzedImage] = useState<string | null>(null);
+    const [activeToolTitle, setActiveToolTitle] = useState<string | null>(null);
     const [sliderPosition, setSliderPosition] = useState(50);
     const [sliderDirection, setSliderDirection] = useState<'ltr' | 'rtl'>('ltr');
     const containerRef = useRef<HTMLDivElement>(null);
 
-    const handleAnalysisResult = useCallback((canvas: HTMLCanvasElement) => {
+    const handleAnalysisResult = useCallback((canvas: HTMLCanvasElement, toolTitle: string) => {
         setAnalyzedImage(canvas.toDataURL());
+        setActiveToolTitle(toolTitle);
     }, []);
-
-
 
     return (
         <div className="forensic-panel animate-fade-in">
@@ -55,12 +56,29 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                     <span>🔍</span>
                     <h2>Forensic Analysis</h2>
                 </div>
-                <button className="forensic-close-btn" onClick={onClose} aria-label="Close">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                </button>
+
+                {analyzedImage ? (
+                    <button
+                        className="forensic-close-btn"
+                        onClick={() => activeToolTitle && onMaximize(analyzedImage, activeToolTitle)}
+                        aria-label="Maximize"
+                        title="Open in Fullscreen Viewer"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="15 3 21 3 21 9" />
+                            <polyline points="9 21 3 21 3 15" />
+                            <line x1="21" y1="3" x2="14" y2="10" />
+                            <line x1="3" y1="21" x2="10" y2="14" />
+                        </svg>
+                    </button>
+                ) : (
+                    <button className="forensic-close-btn" onClick={onClose} aria-label="Close">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                )}
             </div>
 
             {/* Comparison View */}
@@ -112,7 +130,7 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
             {/* Controls */}
             {analyzedImage && (
                 <div className="comparison-actions">
-                    <button className="undo-btn" onClick={() => setAnalyzedImage(null)} title="Undo Analysis">
+                    <button className="undo-btn" onClick={() => { setAnalyzedImage(null); setActiveToolTitle(null); }} title="Undo Analysis">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M3 12a9 9 0 1 0 9-9 9.75 3.88 0 0 0-7.74 2.74L3 12" />
                             <path d="M3 3v9h9" />
@@ -161,7 +179,7 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                     >
                         <tool.Component
                             targetImage={targetImage}
-                            onResult={handleAnalysisResult}
+                            onResult={(canvas) => handleAnalysisResult(canvas, tool.title)}
                         />
                     </ToolCard>
                 ))}

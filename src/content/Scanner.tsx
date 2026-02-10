@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GlassCard } from '../components/GlassCard';
 import { ResultView, ScanResult } from '../components/ResultView';
 import { ForensicToolsPanel } from '../components/ForensicToolsPanel';
+import { ImageViewer } from '../components/ImageViewer';
 
 type ScanState = 'idle' | 'scanning' | 'result' | 'tools' | 'error';
 
@@ -21,6 +22,9 @@ export const Scanner: React.FC = () => {
     const [result, setResult] = useState<ScanResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [targetImage, setTargetImage] = useState<string | null>(null);
+
+    // New Feature: Fullscreen Image Viewer
+    const [viewingImage, setViewingImage] = useState<{ url: string; title: string } | null>(null);
 
     // Dragging state
     const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -140,6 +144,7 @@ export const Scanner: React.FC = () => {
         setTargetImage(null);
         // Reset position on close so next open is centered (per user request for centering)
         setPosition(null);
+        setViewingImage(null); // Close viewer too
     };
 
     if (state === 'idle') return null;
@@ -158,6 +163,9 @@ export const Scanner: React.FC = () => {
                     scrollbar-width: none;
                 }
             `}</style>
+
+
+
             <div
                 className="fixed inset-0 z-[999999] pointer-events-none"
                 style={{
@@ -263,6 +271,7 @@ export const Scanner: React.FC = () => {
                                         targetImage={targetImage}
                                         onBack={() => setState('result')}
                                         onClose={handleClose}
+                                        onMaximize={(img, title) => setViewingImage({ url: img, title })}
                                     />
                                 )}
 
@@ -283,6 +292,14 @@ export const Scanner: React.FC = () => {
                     </GlassCard>
                 </div>
             </div>
+            {/* Fullscreen Image Viewer Overlay - Rendered LAST for stacking order */}
+            {viewingImage && (
+                <ImageViewer
+                    image={viewingImage.url}
+                    title={viewingImage.title}
+                    onClose={() => setViewingImage(null)}
+                />
+            )}
         </React.Fragment>
     );
 };

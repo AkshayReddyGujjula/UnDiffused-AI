@@ -9,23 +9,23 @@
     "file": "assets/ResultView-BXWFaSCq.js",
     "name": "ResultView"
   },
-  "_index-BU0ULlbX.css": {
-    "file": "assets/index-BU0ULlbX.css",
-    "src": "_index-BU0ULlbX.css"
-  },
-  "_index-YQ6ijAmI.js": {
-    "file": "assets/index-YQ6ijAmI.js",
+  "_index-CZfEG8Rg.js": {
+    "file": "assets/index-CZfEG8Rg.js",
     "name": "index",
     "imports": [
       "_ResultView-BXWFaSCq.js"
     ],
     "css": [
-      "assets/index-BU0ULlbX.css"
+      "assets/index-DNmJxR4N.css"
     ]
   },
-  "_index.tsx-loader-CIBCoz1_.js": {
-    "file": "assets/index.tsx-loader-CIBCoz1_.js",
-    "src": "_index.tsx-loader-CIBCoz1_.js"
+  "_index-DNmJxR4N.css": {
+    "file": "assets/index-DNmJxR4N.css",
+    "src": "_index-DNmJxR4N.css"
+  },
+  "_index.tsx-loader-CO5olMJ-.js": {
+    "file": "assets/index.tsx-loader-CO5olMJ-.js",
+    "src": "_index.tsx-loader-CO5olMJ-.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -42,7 +42,7 @@
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-DumAhd1y.js",
+    "file": "assets/index.tsx-CtZUKhS4.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,
@@ -63,13 +63,13 @@
     ]
   },
   "src/popup/popup.html": {
-    "file": "assets/popup.html-CI-sl5oi.js",
+    "file": "assets/popup.html-C5RI2Zmg.js",
     "name": "popup.html",
     "src": "src/popup/popup.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_index-YQ6ijAmI.js",
+      "_index-CZfEG8Rg.js",
       "_ResultView-BXWFaSCq.js"
     ]
   }
