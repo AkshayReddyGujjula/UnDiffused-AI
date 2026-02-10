@@ -40,13 +40,7 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
         setAnalyzedImage(canvas.toDataURL());
     }, []);
 
-    const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
-        if (!containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-        const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-        setSliderPosition((x / rect.width) * 100);
-    };
+
 
     return (
         <div className="forensic-panel animate-fade-in">
@@ -73,8 +67,6 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
             <div
                 className="comparison-container"
                 ref={containerRef}
-                onMouseMove={handleMouseMove}
-                onTouchMove={handleMouseMove}
             >
                 <img src={targetImage} alt="Original" className="comparison-image" />
 
@@ -94,8 +86,15 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                             alt="Analyzed"
                             className="comparison-image"
                             style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: sliderDirection === 'ltr' ? 0 : 'auto',
+                                right: sliderDirection === 'rtl' ? 0 : 'auto',
                                 width: containerRef.current?.offsetWidth || '100%',
-                                marginLeft: sliderDirection === 'ltr' ? 0 : `-${100 - sliderPosition}%` // Counter-offset for right alignment
+                                height: '100%',
+                                maxWidth: 'none',
+                                maxHeight: 'none',
+                                objectFit: 'contain'
                             }}
                         />
                     </div>
