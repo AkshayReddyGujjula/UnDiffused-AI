@@ -1,7 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 
 interface AberrationToolProps {
     targetImage: string;
+    onResult?: (canvas: HTMLCanvasElement) => void;
 }
 
 /**
@@ -11,11 +12,9 @@ interface AberrationToolProps {
  * Real lens photos show slight RGB channel misalignment;
  * AI images typically lack this optical imperfection.
  */
-export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage }) => {
+export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage, onResult }) => {
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [stats, setStats] = useState<{ avgSeparation: number; detected: boolean; edgesAnalysed: number } | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
@@ -134,7 +133,10 @@ export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage }) =
                 ctx.fill();
             }
 
-            resultRef.current = resultCanvas;
+            // Pass result up
+            if (onResult) {
+                onResult(resultCanvas);
+            }
 
             setStats({
                 avgSeparation: avgSeparation * 100,
@@ -146,19 +148,7 @@ export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage }) =
         } finally {
             setIsAnalysing(false);
         }
-    }, [targetImage]);
-
-    // Draw result when stats change
-    React.useEffect(() => {
-        if (stats && resultRef.current && canvasRef.current) {
-            const ctx = canvasRef.current.getContext('2d');
-            if (ctx) {
-                canvasRef.current.width = resultRef.current.width;
-                canvasRef.current.height = resultRef.current.height;
-                ctx.drawImage(resultRef.current, 0, 0);
-            }
-        }
-    }, [stats]);
+    }, [targetImage, onResult]);
 
     return (
         <div>
@@ -169,7 +159,9 @@ export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage }) =
 
             {stats && (
                 <div className="tool-output-area">
-                    <canvas ref={canvasRef} className="tool-output-canvas" />
+                    <div className="tool-stat-label" style={{ textAlign: 'center', marginBottom: 0 }}>
+                        Result shown in main view
+                    </div>
                     <div className="tool-stats">
                         <div className="tool-stat">
                             <p className="tool-stat-label">Channel Separation</p>
@@ -187,8 +179,6 @@ export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage }) =
                     </div>
                 </div>
             )}
-
-            {!stats && <canvas ref={canvasRef} style={{ display: 'none' }} />}
         </div>
     );
 };

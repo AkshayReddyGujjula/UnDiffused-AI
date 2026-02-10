@@ -1,7 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 
 interface HighlightToolProps {
     targetImage: string;
+    onResult?: (canvas: HTMLCanvasElement) => void;
 }
 
 /**
@@ -10,12 +11,10 @@ interface HighlightToolProps {
  * Detects specular highlights and estimates light source direction.
  * Inconsistent highlight directions indicate manipulation.
  */
-export const HighlightTool: React.FC<HighlightToolProps> = ({ targetImage }) => {
+export const HighlightTool: React.FC<HighlightToolProps> = ({ targetImage, onResult }) => {
     const [sensitivity, setSensitivity] = useState(6);
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [stats, setStats] = useState<{ highlights: number; consistent: number; inconsistent: number } | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
@@ -143,26 +142,18 @@ export const HighlightTool: React.FC<HighlightToolProps> = ({ targetImage }) => 
                 }
             });
 
-            resultRef.current = resultCanvas;
+            // Pass result up
+            if (onResult) {
+                onResult(resultCanvas);
+            }
+
             setStats({ highlights: highlights.length, consistent, inconsistent });
         } catch (err) {
             console.error('[Highlight] Analysis failed:', err);
         } finally {
             setIsAnalysing(false);
         }
-    }, [targetImage, sensitivity]);
-
-    // Draw result
-    React.useEffect(() => {
-        if (stats && resultRef.current && canvasRef.current) {
-            const ctx = canvasRef.current.getContext('2d');
-            if (ctx) {
-                canvasRef.current.width = resultRef.current.width;
-                canvasRef.current.height = resultRef.current.height;
-                ctx.drawImage(resultRef.current, 0, 0);
-            }
-        }
-    }, [stats]);
+    }, [targetImage, sensitivity, onResult]);
 
     return (
         <div>
@@ -179,7 +170,9 @@ export const HighlightTool: React.FC<HighlightToolProps> = ({ targetImage }) => 
 
             {stats && (
                 <div className="tool-output-area">
-                    <canvas ref={canvasRef} className="tool-output-canvas" />
+                    <div className="tool-stat-label" style={{ textAlign: 'center', marginBottom: 0 }}>
+                        Result shown in main view
+                    </div>
                     <div className="tool-stats">
                         <div className="tool-stat">
                             <p className="tool-stat-label">Highlights Found</p>
@@ -195,8 +188,6 @@ export const HighlightTool: React.FC<HighlightToolProps> = ({ targetImage }) => 
                     </div>
                 </div>
             )}
-
-            {!stats && <canvas ref={canvasRef} style={{ display: 'none' }} />}
         </div>
     );
 };

@@ -1,7 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 
 interface CloneToolProps {
     targetImage: string;
+    onResult?: (canvas: HTMLCanvasElement) => void;
 }
 
 /**
@@ -10,13 +11,11 @@ interface CloneToolProps {
  * Finds duplicated regions in an image using block matching.
  * Highlights clone pairs with matching colours and connecting lines.
  */
-export const CloneTool: React.FC<CloneToolProps> = ({ targetImage }) => {
+export const CloneTool: React.FC<CloneToolProps> = ({ targetImage, onResult }) => {
     const [sensitivity, setSensitivity] = useState(5);
     const [minRegion, setMinRegion] = useState(32);
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [cloneCount, setCloneCount] = useState<number | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const hashBlock = (data: Uint8ClampedArray, w: number, bx: number, by: number, size: number): number => {
         let hash = 0;
@@ -145,26 +144,18 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage }) => {
                 ctx.globalAlpha = 1;
             });
 
-            resultRef.current = resultCanvas;
+            // Pass result up
+            if (onResult) {
+                onResult(resultCanvas);
+            }
+
             setCloneCount(limitedPairs.length);
         } catch (err) {
             console.error('[Clone] Detection failed:', err);
         } finally {
             setIsAnalysing(false);
         }
-    }, [targetImage, sensitivity, minRegion]);
-
-    // Draw result when cloneCount changes
-    React.useEffect(() => {
-        if (cloneCount !== null && resultRef.current && canvasRef.current) {
-            const ctx = canvasRef.current.getContext('2d');
-            if (ctx) {
-                canvasRef.current.width = resultRef.current.width;
-                canvasRef.current.height = resultRef.current.height;
-                ctx.drawImage(resultRef.current, 0, 0);
-            }
-        }
-    }, [cloneCount]);
+    }, [targetImage, sensitivity, minRegion, onResult]);
 
     return (
         <div>
@@ -187,14 +178,14 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage }) => {
 
             {cloneCount !== null && (
                 <div className="tool-output-area">
-                    <canvas ref={canvasRef} className="tool-output-canvas" />
+                    <div className="tool-stat-label" style={{ textAlign: 'center', marginBottom: 0 }}>
+                        Result shown in main view
+                    </div>
                     <div className={`tool-verdict ${cloneCount > 5 ? 'tool-verdict-danger' : cloneCount > 0 ? 'tool-verdict-suspicious' : 'tool-verdict-safe'}`}>
                         {cloneCount > 0 ? '🎯' : '✅'} Found {cloneCount} clone {cloneCount === 1 ? 'pair' : 'pairs'}
                     </div>
                 </div>
             )}
-
-            {cloneCount === null && <canvas ref={canvasRef} style={{ display: 'none' }} />}
         </div>
     );
 };

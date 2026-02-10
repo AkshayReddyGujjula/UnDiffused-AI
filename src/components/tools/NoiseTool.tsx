@@ -1,8 +1,9 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { LiquidSelect } from '../LiquidSelect';
 
 interface NoiseToolProps {
     targetImage: string;
+    onResult?: (canvas: HTMLCanvasElement) => void;
 }
 
 /**
@@ -11,13 +12,11 @@ interface NoiseToolProps {
  * Divides image into blocks, computes noise variance per block
  * using a high-pass filter. Uniform noise = AI suspect.
  */
-export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage }) => {
+export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage, onResult }) => {
     const [noiseType, setNoiseType] = useState<'luminance' | 'chromatic' | 'both'>('luminance');
     const [blockSize, setBlockSize] = useState(32);
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [stats, setStats] = useState<{ mean: number; std: number; uniformity: number } | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
@@ -28,7 +27,7 @@ export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage }) => {
             img.crossOrigin = 'anonymous';
             await new Promise<void>((resolve, reject) => {
                 img.onload = () => resolve();
-                img.onerror = () => reject(new Error('Failed to load'));
+                img.onerror = () => reject(new Error('Failed to load image'));
                 img.src = targetImage;
             });
 
@@ -94,8 +93,6 @@ export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage }) => {
             const stdVar = Math.sqrt(variances.reduce((a, b) => a + (b - meanVar) ** 2, 0) / variances.length);
             const uniformity = Math.max(0, 100 - (stdVar / meanVar) * 100);
 
-            setStats({ mean: meanVar, std: stdVar, uniformity });
-
             // Render heat map to off-screen canvas
             const resultCanvas = document.createElement('canvas');
             resultCanvas.width = w;
@@ -125,26 +122,18 @@ export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage }) => {
                 }
             }
 
-            resultRef.current = resultCanvas;
+            // Pass result up
+            if (onResult) {
+                onResult(resultCanvas);
+            }
+
             setStats({ mean: meanVar, std: stdVar, uniformity });
         } catch (err) {
             console.error('[Noise] Analysis failed:', err);
         } finally {
             setIsAnalysing(false);
         }
-    }, [targetImage, noiseType, blockSize]);
-
-    // Draw result
-    React.useEffect(() => {
-        if (stats && resultRef.current && canvasRef.current) {
-            const ctx = canvasRef.current.getContext('2d');
-            if (ctx) {
-                canvasRef.current.width = resultRef.current.width;
-                canvasRef.current.height = resultRef.current.height;
-                ctx.drawImage(resultRef.current, 0, 0);
-            }
-        }
-    }, [stats]);
+    }, [targetImage, noiseType, blockSize, onResult]);
 
     return (
         <div>
@@ -174,15 +163,17 @@ export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage }) => {
 
             {stats && (
                 <div className="tool-output-area">
-                    <canvas ref={canvasRef} className="tool-output-canvas" />
+                    <div className="tool-stat-label" style={{ textAlign: 'center', marginBottom: 0 }}>
+                        Result shown in main view
+                    </div>
                     <div className="tool-stats">
                         <div className="tool-stat">
-                            <p className="tool-stat-label">Mean Variance</p>
-                            <p className="tool-stat-value">{stats.mean.toFixed(2)}</p>
+                            <div className="tool-stat-label">Mean Variance</div>
+                            <div className="tool-stat-value">{stats.mean.toFixed(2)}</div>
                         </div>
                         <div className="tool-stat">
-                            <p className="tool-stat-label">Std Deviation</p>
-                            <p className="tool-stat-value">{stats.std.toFixed(2)}</p>
+                            <div className="tool-stat-label">Std Deviation</div>
+                            <div className="tool-stat-value">{stats.std.toFixed(2)}</div>
                         </div>
                     </div>
                     <div className={`tool-verdict ${stats.uniformity > 70 ? 'tool-verdict-danger' : stats.uniformity > 40 ? 'tool-verdict-suspicious' : 'tool-verdict-safe'}`}>
@@ -191,8 +182,6 @@ export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage }) => {
                     </div>
                 </div>
             )}
-
-            {!stats && <canvas ref={canvasRef} style={{ display: 'none' }} />}
         </div>
     );
 };

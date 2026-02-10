@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { ToolCard } from './ToolCard';
 import { ELATool } from './tools/ELATool';
 import { NoiseTool } from './tools/NoiseTool';
@@ -31,6 +31,23 @@ const TOOLS = [
 ];
 
 export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetImage, onBack, onClose }) => {
+    const [analyzedImage, setAnalyzedImage] = useState<string | null>(null);
+    const [sliderPosition, setSliderPosition] = useState(50);
+    const [sliderDirection, setSliderDirection] = useState<'ltr' | 'rtl'>('ltr');
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const handleAnalysisResult = useCallback((canvas: HTMLCanvasElement) => {
+        setAnalyzedImage(canvas.toDataURL());
+    }, []);
+
+    const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+        setSliderPosition((x / rect.width) * 100);
+    };
+
     return (
         <div className="forensic-panel animate-fade-in">
             <div className="forensic-header">
@@ -52,14 +69,86 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                 </button>
             </div>
 
-            <div className="forensic-image-preview">
-                <img src={targetImage} alt="Image under analysis" />
+            {/* Comparison View */}
+            <div
+                className="comparison-container"
+                ref={containerRef}
+                onMouseMove={handleMouseMove}
+                onTouchMove={handleMouseMove}
+            >
+                <img src={targetImage} alt="Original" className="comparison-image" />
+
+                {analyzedImage && (
+                    <div
+                        className="comparison-overlay"
+                        style={{
+                            width: `${sliderDirection === 'ltr' ? sliderPosition : 100 - sliderPosition}%`,
+                            left: sliderDirection === 'ltr' ? 0 : 'auto',
+                            right: sliderDirection === 'rtl' ? 0 : 'auto',
+                            borderRight: sliderDirection === 'ltr' ? '2px solid #fff' : 'none',
+                            borderLeft: sliderDirection === 'rtl' ? '2px solid #fff' : 'none'
+                        }}
+                    >
+                        <img
+                            src={analyzedImage}
+                            alt="Analyzed"
+                            className="comparison-image"
+                            style={{
+                                width: containerRef.current?.offsetWidth || '100%',
+                                marginLeft: sliderDirection === 'ltr' ? 0 : `-${100 - sliderPosition}%` // Counter-offset for right alignment
+                            }}
+                        />
+                    </div>
+                )}
+
+                {/* Slider Handle (Visual only, simpler than dragging logic implementation for now) */}
+                {analyzedImage && (
+                    <div
+                        className="comparison-slider-handle"
+                        style={{ left: `${sliderPosition}%` }}
+                    />
+                )}
             </div>
 
-            <div className="forensic-section-title">
-                <span>📊</span>
-                <h3>Analysis Tools</h3>
-            </div>
+            {/* Controls */}
+            {analyzedImage && (
+                <div className="comparison-actions">
+                    <button className="undo-btn" onClick={() => setAnalyzedImage(null)} title="Undo Analysis">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 3.88 0 0 0-7.74 2.74L3 12" />
+                            <path d="M3 3v9h9" />
+                        </svg>
+                    </button>
+
+                    <input
+                        type="range"
+                        className="tool-slider"
+                        min="0"
+                        max="100"
+                        value={sliderPosition}
+                        onChange={(e) => setSliderPosition(Number(e.target.value))}
+                        style={{ flex: 1, margin: '0 12px' }}
+                    />
+
+                    <button
+                        className="flip-btn"
+                        onClick={() => setSliderDirection(prev => prev === 'ltr' ? 'rtl' : 'ltr')}
+                        title="Flip Direction"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 21v-7a4 4 0 0 1 4-4h12" />
+                            <path d="M16 6l4 4-4 4" />
+                        </svg>
+                    </button>
+                </div>
+            )}
+
+            {!analyzedImage && (
+                <div className="forensic-section-title">
+                    <span>📊</span>
+                    <h3>Select a tool to analyse</h3>
+                </div>
+            )}
 
             <div className="forensic-tools-grid">
                 {TOOLS.map((tool, index) => (
@@ -71,7 +160,10 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                         tier={tool.tier}
                         index={index}
                     >
-                        <tool.Component targetImage={targetImage} />
+                        <tool.Component
+                            targetImage={targetImage}
+                            onResult={handleAnalysisResult}
+                        />
                     </ToolCard>
                 ))}
             </div>

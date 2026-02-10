@@ -1,8 +1,9 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { LiquidSelect } from '../LiquidSelect';
 
 interface ELAToolProps {
     targetImage: string;
+    onResult?: (canvas: HTMLCanvasElement) => void;
 }
 
 /**
@@ -11,22 +12,19 @@ interface ELAToolProps {
  * Re-compresses image at a given quality level and computes
  * pixel-wise absolute difference to reveal compression inconsistencies.
  */
-export const ELATool: React.FC<ELAToolProps> = ({ targetImage }) => {
+export const ELATool: React.FC<ELAToolProps> = ({ targetImage, onResult }) => {
     const [quality, setQuality] = useState(85);
     const [sensitivity, setSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
     const [isAnalysing, setIsAnalysing] = useState(false);
-    const [hasResult, setHasResult] = useState(false);
-    const [opacity, setOpacity] = useState(100);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const originalRef = useRef<HTMLCanvasElement>(null);
-    const resultDataRef = useRef<HTMLCanvasElement | null>(null);
-    const originalDataRef = useRef<HTMLCanvasElement | null>(null);
+
+    // Stats for local display
+    const [stats, setStats] = useState<{ diffScore: number } | null>(null);
 
     const sensitivityMultiplier = sensitivity === 'low' ? 10 : sensitivity === 'medium' ? 20 : 40;
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
-        setHasResult(false);
+        setStats(null);
 
         try {
             const img = new Image();
@@ -75,10 +73,14 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage }) => {
             const ctx = resultCanvas.getContext('2d')!;
             const outData = ctx.createImageData(w, h);
 
+            let totalDiff = 0;
+
             for (let i = 0; i < originalData.data.length; i += 4) {
                 const dr = Math.abs(originalData.data[i] - recompData.data[i]);
                 const dg = Math.abs(originalData.data[i + 1] - recompData.data[i + 1]);
                 const db = Math.abs(originalData.data[i + 2] - recompData.data[i + 2]);
+
+                totalDiff += dr + dg + db;
 
                 // Amplify differences
                 const r = Math.min(255, dr * sensitivityMultiplier);
@@ -109,50 +111,19 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage }) => {
 
             ctx.putImageData(outData, 0, 0);
 
-            // Store results
-            resultDataRef.current = resultCanvas;
-            originalDataRef.current = origCanvas; // Reuse the temp canvas we drew to earlier
+            // Pass result up
+            if (onResult) {
+                onResult(resultCanvas);
+            }
 
-            setHasResult(true);
+            setStats({ diffScore: totalDiff / (w * h) });
+
         } catch (err) {
             console.error('[ELA] Analysis failed:', err);
         } finally {
             setIsAnalysing(false);
         }
-    }, [targetImage, quality, sensitivityMultiplier]);
-
-    // Draw results when ready
-    React.useEffect(() => {
-        if (hasResult && resultDataRef.current && originalDataRef.current) {
-            // Draw result
-            if (canvasRef.current) {
-                const ctx = canvasRef.current.getContext('2d');
-                if (ctx) {
-                    canvasRef.current.width = resultDataRef.current.width;
-                    canvasRef.current.height = resultDataRef.current.height;
-                    ctx.drawImage(resultDataRef.current, 0, 0);
-                }
-            }
-            // Draw original
-            if (originalRef.current) {
-                const ctx = originalRef.current.getContext('2d');
-                if (ctx) {
-                    originalRef.current.width = originalDataRef.current.width;
-                    originalRef.current.height = originalDataRef.current.height;
-                    ctx.drawImage(originalDataRef.current, 0, 0);
-                }
-            }
-        }
-    }, [hasResult]);
-
-    const exportResult = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const link = document.createElement('a');
-        link.download = 'ela-analysis.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-    };
+    }, [targetImage, quality, sensitivityMultiplier, onResult]);
 
     return (
         <div>
@@ -185,42 +156,27 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage }) => {
 
             {/* Analyse button */}
             <button
-                className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''}`}
+                className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''} `}
                 onClick={analyse}
                 disabled={isAnalysing}
             >
-                {isAnalysing ? 'Analysing...' : '🔬 Analyse'}
+                {isAnalysing ? 'Analysing...' : '🔬 Analyse Error Levels'}
             </button>
 
-            {/* Results */}
-            {hasResult && (
+            {/* Stats */}
+            {stats && (
                 <div className="tool-output-area">
-                    <div style={{ position: 'relative' }}>
-                        <canvas ref={originalRef} className="tool-output-canvas" style={{ opacity: 1 - opacity / 100 }} />
-                        <canvas
-                            ref={canvasRef}
-                            className="tool-output-canvas"
-                            style={{ position: 'absolute', top: 0, left: 0, opacity: opacity / 100 }}
-                        />
+                    <div className="tool-stat-label" style={{ textAlign: 'center', marginBottom: 0 }}>
+                        Result shown in main view
                     </div>
-                    <div className="tool-control-group" style={{ marginTop: 10 }}>
-                        <label className="tool-control-label">ELA Overlay Opacity: {opacity}%</label>
-                        <input
-                            type="range"
-                            className="tool-slider"
-                            min="0"
-                            max="100"
-                            value={opacity}
-                            onChange={(e) => setOpacity(Number(e.target.value))}
-                        />
+                    <div className="tool-stats">
+                        <div className="tool-stat">
+                            <div className="tool-stat-label">Difference Score</div>
+                            <div className="tool-stat-value">{stats.diffScore.toFixed(2)}</div>
+                        </div>
                     </div>
-                    <button className="tool-export-btn" onClick={exportResult}>📥 Export PNG</button>
                 </div>
             )}
-
-            {/* Hidden canvas */}
-            {!hasResult && <canvas ref={canvasRef} style={{ display: 'none' }} />}
-            {!hasResult && <canvas ref={originalRef} style={{ display: 'none' }} />}
         </div>
     );
 };

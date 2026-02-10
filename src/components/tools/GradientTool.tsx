@@ -3,6 +3,7 @@ import { LiquidSelect } from '../LiquidSelect';
 
 interface GradientToolProps {
     targetImage: string;
+    onResult?: (canvas: HTMLCanvasElement) => void;
 }
 
 /**
@@ -11,14 +12,12 @@ interface GradientToolProps {
  * Computes edge maps using Sobel, Canny, or Laplacian filters.
  * AI images often exhibit unnaturally smooth gradients.
  */
-export const GradientTool: React.FC<GradientToolProps> = ({ targetImage }) => {
+export const GradientTool: React.FC<GradientToolProps> = ({ targetImage, onResult }) => {
     const [detector, setDetector] = useState<'sobel' | 'canny' | 'laplacian'>('sobel');
     const [threshold, setThreshold] = useState(100);
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [stats, setStats] = useState<{ edgeDensity: number; avgStrength: number; uniformity: number } | null>(null);
     const [activeTab, setActiveTab] = useState(0);
-    const edgeCanvasRef = useRef<HTMLCanvasElement>(null);
-    const magCanvasRef = useRef<HTMLCanvasElement>(null);
     const edgeRef = useRef<HTMLCanvasElement | null>(null);
     const magRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -182,26 +181,16 @@ export const GradientTool: React.FC<GradientToolProps> = ({ targetImage }) => {
         }
     }, [targetImage, detector, threshold]);
 
-    // Draw result when stats or activeTab changes
+    // Pass result up when stats or activeTab changes
     React.useEffect(() => {
-        if (stats) {
-            if (activeTab === 0 && edgeRef.current && edgeCanvasRef.current) {
-                const ctx = edgeCanvasRef.current.getContext('2d');
-                if (ctx) {
-                    edgeCanvasRef.current.width = edgeRef.current.width;
-                    edgeCanvasRef.current.height = edgeRef.current.height;
-                    ctx.drawImage(edgeRef.current, 0, 0);
-                }
-            } else if (activeTab === 1 && magRef.current && magCanvasRef.current) {
-                const ctx = magCanvasRef.current.getContext('2d');
-                if (ctx) {
-                    magCanvasRef.current.width = magRef.current.width;
-                    magCanvasRef.current.height = magRef.current.height;
-                    ctx.drawImage(magRef.current, 0, 0);
-                }
+        if (stats && onResult) {
+            if (activeTab === 0 && edgeRef.current) {
+                onResult(edgeRef.current);
+            } else if (activeTab === 1 && magRef.current) {
+                onResult(magRef.current);
             }
         }
-    }, [stats, activeTab]);
+    }, [stats, activeTab, onResult]);
 
     return (
         <div>
@@ -238,10 +227,9 @@ export const GradientTool: React.FC<GradientToolProps> = ({ targetImage }) => {
                             onClick={() => setActiveTab(1)}>Gradient Magnitude</button>
                     </div>
 
-                    <canvas ref={edgeCanvasRef} className="tool-output-canvas"
-                        style={{ display: activeTab === 0 ? 'block' : 'none' }} />
-                    <canvas ref={magCanvasRef} className="tool-output-canvas"
-                        style={{ display: activeTab === 1 ? 'block' : 'none' }} />
+                    <div className="tool-stat-label" style={{ textAlign: 'center', marginBottom: 0 }}>
+                        Result shown in main view
+                    </div>
 
                     <div className="tool-stats">
                         <div className="tool-stat">
@@ -258,13 +246,6 @@ export const GradientTool: React.FC<GradientToolProps> = ({ targetImage }) => {
                         {' '}(Uniformity: {stats.uniformity.toFixed(1)}%)
                     </div>
                 </div>
-            )}
-
-            {!stats && (
-                <>
-                    <canvas ref={edgeCanvasRef} style={{ display: 'none' }} />
-                    <canvas ref={magCanvasRef} style={{ display: 'none' }} />
-                </>
             )}
         </div>
     );

@@ -1,8 +1,9 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { LiquidSelect } from '../LiquidSelect';
 
 interface PRNUToolProps {
     targetImage: string;
+    onResult?: (canvas: HTMLCanvasElement) => void;
 }
 
 /**
@@ -11,13 +12,11 @@ interface PRNUToolProps {
  * Extracts noise residual via wavelet-like denoising.
  * Real camera photos have a unique sensor fingerprint; AI images lack it.
  */
-export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage }) => {
+export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage, onResult }) => {
     const [filterLevel, setFilterLevel] = useState<'low' | 'medium' | 'high'>('medium');
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [stats, setStats] = useState<{ hasFingerprint: boolean; consistency: number; uniformity: number } | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const resultRef = useRef<HTMLCanvasElement | null>(null);
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
@@ -143,7 +142,11 @@ export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage }) => {
 
             ctx.putImageData(outData, 0, 0);
 
-            resultRef.current = resultCanvas;
+            // Pass result up
+            if (onResult) {
+                onResult(resultCanvas);
+            }
+
             setProgress(100);
             setStats({ hasFingerprint, consistency, uniformity });
 
@@ -152,19 +155,7 @@ export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage }) => {
         } finally {
             setIsAnalysing(false);
         }
-    }, [targetImage, filterLevel]);
-
-    // Draw result
-    React.useEffect(() => {
-        if (stats && resultRef.current && canvasRef.current) {
-            const ctx = canvasRef.current.getContext('2d');
-            if (ctx) {
-                canvasRef.current.width = resultRef.current.width;
-                canvasRef.current.height = resultRef.current.height;
-                ctx.drawImage(resultRef.current, 0, 0);
-            }
-        }
-    }, [stats]);
+    }, [targetImage, filterLevel, onResult]);
 
     return (
         <div>
@@ -198,7 +189,9 @@ export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage }) => {
 
             {stats && (
                 <div className="tool-output-area">
-                    <canvas ref={canvasRef} className="tool-output-canvas" />
+                    <div className="tool-stat-label" style={{ textAlign: 'center', marginBottom: 0 }}>
+                        Result shown in main view
+                    </div>
                     <div className="tool-stats">
                         <div className="tool-stat">
                             <p className="tool-stat-label">Pattern Consistency</p>
@@ -214,8 +207,6 @@ export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage }) => {
                     </div>
                 </div>
             )}
-
-            {!stats && !isAnalysing && <canvas ref={canvasRef} style={{ display: 'none' }} />}
         </div>
     );
 };
