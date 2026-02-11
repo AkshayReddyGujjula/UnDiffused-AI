@@ -44,9 +44,9 @@ If you want to build the project from scratch or contribute:
 
 ### 2. Installation
 ```bash
-# Clone the repository
-git clone https://github.com/AkshayReddyGujjula/UnDiffused-AI.git
-cd UnDiffused-AI
+git clone https://github.com/your-repo/AI-Image-Checker.git
+cd AI-Image-Checker
+```
 
 # Install frontend dependencies
 npm install
@@ -59,16 +59,31 @@ pip install -r requirements.txt
 ```bash
 # Compile and build the extension
 npm run build
-
-# To run in development mode with hot-reload:
-npm run dev
 ```
 
-### 4. Training a Custom Model (Optional)
-The extension uses a pre-trained model. To train your own:
-1. Place your dataset in `C:\Users\...\DataSets\train` (or update `scripts/train.py`).
-2. Run: `python scripts/train.py`
-3. The new `model.onnx` will be automatically exported to the `public/` directory.
+---
+
+## 🔧 Loading the Extension in Chrome
+
+1.  Open Chrome and navigate to `chrome://extensions/`.
+2.  Enable **Developer mode** (toggle in the top right corner).
+3.  Click **Load unpacked**.
+4.  Navigate to your project directory and select the `dist` folder.
+5.  UnDiffused is now ready! Pin it to your toolbar for easy access.
+
+---
+
+## 🧠 Training the Model (Advance Users)
+
+The extension comes with a pre-trained model located in `public/model.onnx`. If you wish to retrain it:
+
+1.  **Download Dataset**: Obtain the [CIFAKE: Real and AI-Generated Images](https://www.kaggle.com/datasets/birdy654/cifake-real-and-ai-generated-fake-images) dataset.
+2.  **Configure Path**: Update the `DATASET_PATH` in `scripts/train.py` to point to your local dataset.
+3.  **Run Training**:
+    ```bash
+    python scripts/train.py
+    ```
+4.  The script will export a new `model.onnx` to the `public/` directory. Rebuild the extension after training.
 
 ---
 
@@ -84,4 +99,4 @@ The extension uses a pre-trained model. To train your own:
 
 ## ⚖️ License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+MIT License - feel free to use and contribute!
