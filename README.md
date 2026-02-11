@@ -11,6 +11,7 @@
 -   **Context Menu Integration**: Right-click any image on any website to check if it's AI-generated.
 -   **Liquid Glass UI**: A modern, sleek dark-mode interface built with Tailwind CSS and React.
 -   **High Performance**: Uses an offscreen document for heavy model computation to keep the UI responsive.
+-   **State-of-the-Art Model**: EfficientNet-B4 with attention mechanisms for maximum accuracy.
 
 ---
 
@@ -19,7 +20,8 @@
 Before you begin, ensure you have the following installed:
 -   **Node.js** (v18 or higher)
 -   **npm** (v9 or higher)
--   **Python 3.9+** (only required for training the model or generating icons)
+-   **Python 3.9+** (required for training the model)
+-   **CUDA 11.8+** (recommended for GPU training)
 
 ---
 
@@ -27,8 +29,8 @@ Before you begin, ensure you have the following installed:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-repo/AI-Image-Checker.git
-cd AI-Image-Checker
+git clone https://github.com/your-repo/UnDiffused-AI.git
+cd UnDiffused-AI
 ```
 
 ### 2. Install Node Dependencies
@@ -36,20 +38,12 @@ cd AI-Image-Checker
 npm install
 ```
 
-### 3. Setup Python Environment (Optional)
-If you want to train the model or generate icons, install the Python requirements:
+### 3. Setup Python Environment
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Generate Icons
-If the `icons/` folder is empty, generate the extension icons using the provided script:
-```bash
-python scripts/generate_icons.py
-```
-
-### 5. Build the Extension
-Build the production-ready extension. This will create a `dist/` folder:
+### 4. Build the Extension
 ```bash
 npm run build
 ```
@@ -66,17 +60,104 @@ npm run build
 
 ---
 
-## 🧠 Training the Model (Advance Users)
+## 🧠 Training the Model
 
-The extension comes with a pre-trained model located in `public/model.onnx`. If you wish to retrain it:
+### Quick Start
+```bash
+# 1. Install training dependencies
+pip install -r requirements.txt
 
-1.  **Download Dataset**: Obtain the [CIFAKE: Real and AI-Generated Images](https://www.kaggle.com/datasets/birdy654/cifake-real-and-ai-generated-fake-images) dataset.
-2.  **Configure Path**: Update the `DATASET_PATH` in `scripts/train.py` to point to your local dataset.
-3.  **Run Training**:
-    ```bash
-    python scripts/train.py
-    ```
-4.  The script will export a new `model.onnx` to the `public/` directory. Rebuild the extension after training.
+# 2. Prepare your dataset (place images in D:\Datasets)
+#    Required structure:
+#    D:\Datasets\
+#    ├── REAL\
+#    │   └── *.jpg/png
+#    └── FAKE\
+#        └── *.jpg/png (or subdirectories by generator)
+
+# 3. Quick validation test (<30 minutes)
+python scripts/train.py --test --epochs 3
+
+# 4. Full training
+python scripts/train.py --epochs 100 --batch-size 4 --accumulate 8
+```
+
+### Training Options
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--data-dir` | `D:\Datasets` | Path to dataset |
+| `--epochs` | 100 | Number of training epochs |
+| `--batch-size` | 4 | Batch size (keep low for 6GB VRAM) |
+| `--accumulate` | 8 | Gradient accumulation steps |
+| `--lr` | 3e-5 | Learning rate |
+| `--test` | - | Quick test mode (<30 min) |
+| `--resume` | - | Resume from checkpoint |
+| `--no-mixup` | - | Disable MixUp/CutMix |
+
+### Dataset Structure
+
+```
+D:\Datasets\
+├── REAL\
+│   ├── photo001.jpg
+│   ├── photo002.png
+│   └── ...
+└── FAKE\
+    ├── midjourney\
+    │   └── *.jpg
+    ├── stable_diffusion\
+    │   └── *.jpg
+    └── other\
+        └── *.jpg
+```
+
+**Tip**: Use the dataset builder to download pre-made datasets:
+```bash
+python scripts/dataset_builder.py --output D:\Datasets
+```
+
+### Hardware Requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| GPU | GTX 1060 6GB | RTX 3060 12GB |
+| RAM | 16GB | 32GB |
+| Storage | 20GB | 50GB |
+| Training Time | 24-48h | 12-24h |
+
+---
+
+## 📊 Benchmark Results
+
+Run benchmarks on your trained model:
+```bash
+# Evaluate model
+python scripts/benchmark.py --checkpoint lightning_logs/version_0/checkpoints/best.ckpt --data D:\Datasets
+
+# Benchmark ONNX inference speed
+python scripts/export_onnx.py benchmark --model public/model.onnx --iterations 100
+```
+
+---
+
+## 📁 Project Structure
+
+```
+UnDiffused-AI/
+├── scripts/
+│   ├── train.py           # Main training script
+│   ├── models.py          # EfficientNet-B4 + CBAM architecture
+│   ├── augmentations.py   # Data augmentation pipeline
+│   ├── dataset_builder.py # Automated dataset preparation
+│   ├── export_onnx.py     # ONNX export with TTA
+│   └── benchmark.py       # Evaluation script
+├── public/
+│   └── model.onnx         # Trained model for browser
+├── src/                   # Chrome extension source
+├── MODEL_CARD.md          # Detailed model documentation
+└── requirements.txt       # Python dependencies
+```
 
 ---
 
@@ -85,8 +166,8 @@ The extension comes with a pre-trained model located in `public/model.onnx`. If 
 -   **Framework**: [Vite](https://vitejs.dev/) + [CRXJS](https://crxjs.dev/vite-plugin)
 -   **Frontend**: [React](https://reactjs.org/) + [Tailwind CSS](https://tailwindcss.com/)
 -   **AI Engine**: [ONNX Runtime Web](https://onnxruntime.ai/docs/tutorials/web/)
--   **Model Training**: Scikit-learn + OpenCV + skl2onnx
--   **Language**: TypeScript
+-   **Model Training**: PyTorch + PyTorch Lightning + timm
+-   **Language**: TypeScript + Python
 
 ---
 

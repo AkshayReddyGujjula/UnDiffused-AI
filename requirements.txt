@@ -1,6 +1,14 @@
+torch
+torchvision
+timm
+pytorch-lightning
 numpy
 opencv-python
 scikit-learn
-skl2onnx
 onnx
-pathlib
+onnxruntime
+datasets
+imagehash
+pillow
+tqdm
+tensorboard
