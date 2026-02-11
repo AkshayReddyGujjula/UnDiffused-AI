@@ -27,8 +27,8 @@ Before you begin, ensure you have the following installed:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-repo/AI-Image-Checker.git
-cd AI-Image-Checker
+git clone https://github.com/your-repo/UnDiffused-AI.git
+cd UnDiffused-AI
 ```
 
 ### 2. Install Node Dependencies
