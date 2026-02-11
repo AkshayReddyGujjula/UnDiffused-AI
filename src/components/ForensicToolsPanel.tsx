@@ -14,7 +14,7 @@ import { fetchImageAsDataUrl } from '../utils/fetchImageAsDataUrl';
 import {
     IconELA, IconNoise, IconClone, IconFFT, IconGradient,
     IconPRNU, IconHighlights, IconAberration, IconCompression, IconMetadata,
-    IconImageAnalysis, IconToolSelect
+    IconImageAnalysis, IconToolSelect, IconDownload
 } from './icons/ForensicIcons';
 
 interface ForensicToolsPanelProps {
@@ -71,6 +71,42 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
         setActiveToolTitle(toolTitle);
     }, []);
 
+    const handleDownload = () => {
+        const imageToDownload = analyzedImage || safeImageUrl || targetImage;
+        const link = document.createElement('a');
+        link.href = imageToDownload;
+
+        // Extract filename from URL
+        let originalName = 'image';
+        try {
+            // Check if it's a data URL or blob URL, if not try to extract name
+            if (!targetImage.startsWith('data:') && !targetImage.startsWith('blob:')) {
+                const urlObj = new URL(targetImage);
+                const pathname = urlObj.pathname;
+                const name = pathname.substring(pathname.lastIndexOf('/') + 1);
+                if (name) originalName = name;
+            }
+        } catch (e) {
+            console.warn('Could not extract filename', e);
+        }
+
+        // Remove extension if present
+        const dotIndex = originalName.lastIndexOf('.');
+        if (dotIndex > 0) {
+            originalName = originalName.substring(0, dotIndex);
+        }
+
+        // Sanitize filename (replace non-alphanumeric chars with underscore)
+        originalName = originalName.replace(/[^a-zA-Z0-9-_]/g, '_');
+
+        const toolSuffix = activeToolTitle ? activeToolTitle.replace(/\s+/g, '_').toLowerCase() : 'original';
+        link.download = `undiffused_${originalName}_${toolSuffix}.png`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="forensic-panel animate-fade-in">
             <div className="forensic-header">
@@ -85,19 +121,30 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                     <h2>Image Analysis</h2>
                 </div>
 
-                <button
-                    className="forensic-close-btn"
-                    onClick={() => onMaximize(analyzedImage || targetImage, activeToolTitle || "Image Fullscreen")}
-                    aria-label="Maximize"
-                    title="Open in Fullscreen Viewer"
-                >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="15 3 21 3 21 9" />
-                        <polyline points="9 21 3 21 3 15" />
-                        <line x1="21" y1="3" x2="14" y2="10" />
-                        <line x1="3" y1="21" x2="10" y2="14" />
-                    </svg>
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                        className="forensic-close-btn"
+                        onClick={handleDownload}
+                        aria-label="Download Image"
+                        title="Download Analysis Result"
+                    >
+                        <IconDownload size={16} color="currentColor" />
+                    </button>
+
+                    <button
+                        className="forensic-close-btn"
+                        onClick={() => onMaximize(analyzedImage || targetImage, activeToolTitle || "Image Fullscreen")}
+                        aria-label="Maximize"
+                        title="Open in Fullscreen Viewer"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="15 3 21 3 21 9" />
+                            <polyline points="9 21 3 21 3 15" />
+                            <line x1="21" y1="3" x2="14" y2="10" />
+                            <line x1="3" y1="21" x2="10" y2="14" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             {/* Comparison View */}
