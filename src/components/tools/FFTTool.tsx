@@ -64,7 +64,7 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage, onResult }) => {
 
         try {
             const img = new Image();
-            img.crossOrigin = 'anonymous';
+
 
             await new Promise<void>((resolve, reject) => {
                 img.onload = () => resolve();

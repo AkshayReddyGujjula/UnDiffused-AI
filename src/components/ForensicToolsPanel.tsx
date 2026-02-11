@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ToolCard } from './ToolCard';
 import { ELATool } from './tools/ELATool';
 import { NoiseTool } from './tools/NoiseTool';
@@ -10,6 +10,7 @@ import { HighlightTool } from './tools/HighlightTool';
 import { AberrationTool } from './tools/AberrationTool';
 import { CompressionTool } from './tools/CompressionTool';
 import { MetadataTool } from './tools/MetadataTool';
+import { fetchImageAsDataUrl } from '../utils/fetchImageAsDataUrl';
 
 interface ForensicToolsPanelProps {
     targetImage: string;
@@ -37,6 +38,28 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
     const [sliderPosition, setSliderPosition] = useState(50);
     const [sliderDirection, setSliderDirection] = useState<'ltr' | 'rtl'>('ltr');
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Convert to data URL on mount to bypass CORS for all tools
+    const [safeImageUrl, setSafeImageUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        setSafeImageUrl(null);
+
+        fetchImageAsDataUrl(targetImage)
+            .then(dataUrl => {
+                if (!cancelled) setSafeImageUrl(dataUrl);
+            })
+            .catch(err => {
+                console.error('[ForensicToolsPanel] Failed to fetch image:', err);
+                if (!cancelled) {
+                    // Fallback: try to use the original URL anyway (works for same-origin / CORS-friendly servers)
+                    setSafeImageUrl(targetImage);
+                }
+            });
+
+        return () => { cancelled = true; };
+    }, [targetImage]);
 
     const handleAnalysisResult = useCallback((canvas: HTMLCanvasElement, toolTitle: string) => {
         setAnalyzedImage(canvas.toDataURL());
@@ -77,7 +100,7 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                 className="comparison-container"
                 ref={containerRef}
             >
-                <img src={targetImage} alt="Original" className="comparison-image" />
+                <img src={safeImageUrl || targetImage} alt="Original" className="comparison-image" />
 
                 {analyzedImage && (
                     <div
@@ -158,23 +181,33 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                 </div>
             )}
 
-            <div className="forensic-tools-grid">
-                {TOOLS.map((tool, index) => (
-                    <ToolCard
-                        key={tool.title}
-                        icon={tool.icon}
-                        title={tool.title}
-                        description={tool.desc}
-                        tier={tool.tier}
-                        index={index}
-                    >
-                        <tool.Component
-                            targetImage={targetImage}
-                            onResult={(canvas) => handleAnalysisResult(canvas, tool.title)}
-                        />
-                    </ToolCard>
-                ))}
-            </div>
+            {!safeImageUrl && (
+                <div style={{ textAlign: 'center', padding: '20px', color: 'rgba(255,255,255,0.7)' }}>
+                    <div className="tool-loading" style={{ display: 'inline-block', padding: '8px 20px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)' }}>
+                        Preparing image for analysis...
+                    </div>
+                </div>
+            )}
+
+            {safeImageUrl && (
+                <div className="forensic-tools-grid">
+                    {TOOLS.map((tool, index) => (
+                        <ToolCard
+                            key={tool.title}
+                            icon={tool.icon}
+                            title={tool.title}
+                            description={tool.desc}
+                            tier={tool.tier}
+                            index={index}
+                        >
+                            <tool.Component
+                                targetImage={safeImageUrl}
+                                onResult={(canvas) => handleAnalysisResult(canvas, tool.title)}
+                            />
+                        </ToolCard>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };

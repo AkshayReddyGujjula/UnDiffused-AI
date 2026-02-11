@@ -159,6 +159,40 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // Return true to indicate async response
         return true;
     }
+
+    // Fetch image and convert to data URL (CORS bypass for content scripts)
+    if (message.type === 'FETCH_IMAGE_AS_DATA_URL') {
+        const imageUrl = message.url;
+        if (!imageUrl) {
+            sendResponse({ success: false, error: 'No URL provided' });
+            return;
+        }
+
+        fetch(imageUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    sendResponse({ success: true, dataUrl: reader.result as string });
+                };
+                reader.onerror = () => {
+                    sendResponse({ success: false, error: 'Failed to read blob' });
+                };
+                reader.readAsDataURL(blob);
+            })
+            .catch(error => {
+                console.error('[UnDiffused] Image fetch error:', error);
+                sendResponse({ success: false, error: error.message });
+            });
+
+        // Return true to indicate async response
+        return true;
+    }
 });
 
 console.log('[UnDiffused] Background service worker ready');

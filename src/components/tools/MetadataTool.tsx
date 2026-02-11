@@ -26,7 +26,7 @@ export const MetadataTool: React.FC<MetadataToolProps> = ({ targetImage }) => {
     const analyse = useCallback(async () => {
         setIsAnalysing(true); setMetadata(null);
         try {
-            const img = new Image(); img.crossOrigin = 'anonymous';
+            const img = new Image();
             await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(); img.src = targetImage; });
 
             // Extract what we can from the URL and image properties
