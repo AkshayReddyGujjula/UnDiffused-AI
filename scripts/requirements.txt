@@ -3,5 +3,7 @@ torchvision
 numpy
 opencv-python
 scikit-learn
+Pillow
+tqdm
 onnx
 onnxruntime

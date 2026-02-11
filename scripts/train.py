@@ -31,7 +31,13 @@ IMAGE_SIZE = 224  # Standard for ResNet
 DEFAULT_BATCH_SIZE = 32 # Balanced for 6GB VRAM
 EPOCHS = 30 # Increased for better convergence
 LEARNING_RATE = 1e-4 # Lower for fine-tuning
-DATASET_PATH = Path(r"C:\Users\aksha\Desktop\DataSets\train")
+# Determine the project root to find data
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Default dataset path relative to project, or can be overridden
+# Looking for 'data' directory in project root by default
+DATASET_PATH = PROJECT_ROOT / "data" / "train"
+if not DATASET_PATH.exists():
+    print(f"[WARNING] Dataset not found at {DATASET_PATH}. Please populate data/train or update the path.")
 
 class ImageDataset(Dataset):
     def __init__(self, root_dir, transform=None, test_mode=False):

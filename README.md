@@ -1,95 +1,87 @@
-# UnDiffused: Privacy-First AI Image Detector
+# 👁️ UnDiffused: Privacy-First AI Image Detector
 
-**UnDiffused** is a Chrome Extension (Manifest V3) designed to detect AI-generated images directly in your browser. Unlike other detectors, UnDiffused prioritizes privacy by performing all image analysis **locally on your device** using ONNX Runtime Web. No images are ever uploaded to a server.
+**UnDiffused** is a cutting-edge Chrome Extension that identifies AI-generated images directly within your browser. 
 
----
-
-## 🚀 Features
-
--   **Local Processing**: Powered by ONNX Runtime Web and WebAssembly.
--   **Privacy First**: No data leaves your machine. Your browsing history and images stay private.
--   **Context Menu Integration**: Right-click any image on any website to check if it's AI-generated.
--   **Liquid Glass UI**: A modern, sleek dark-mode interface built with Tailwind CSS and React.
--   **High Performance**: Uses an offscreen document for heavy model computation to keep the UI responsive.
+Unlike most detectors that send your data to a remote server, UnDiffused performs all analysis **100% locally on your computer**. Your images and browsing habits stay private, exactly where they belong.
 
 ---
 
-## 🛠️ Prerequisites
+## ✨ Features
 
-Before you begin, ensure you have the following installed:
--   **Node.js** (v18 or higher)
--   **npm** (v9 or higher)
--   **Python 3.9+** (only required for training the model or generating icons)
+*   **🛡️ Total Privacy**: No images ever leave your device. Analysis is powered by ONNX Runtime Web using your local CPU/GPU.
+*   **🔍 Professional Image Analysis**: Beyond just a "Real vs AI" score, UnDiffused provides a suite of forensic tools:
+    *   **Error Level Analysis (ELA)**: Spots inconsistencies in image compression.
+    *   **Noise Pattern Analysis**: Examines sensor fingerprints to find anomalies.
+    *   **Clone Detection**: Highlights duplicated regions inside an image.
+    *   **Frequency Domain (FFT)**: Reveals periodic patterns common in AI generation.
+    *   **Luminance Gradient**: Checks if the lighting follows consistent geometric patterns.
+*   **💾 Download Results**: Save your analysis results as high-quality PNGs for sharing or evidence.
+*   **💎 Modern UI**: A sleek, dark-mode "Liquid Glass" interface that feels premium and responsive.
+*   **⚡ Context Menu**: Just right-click any image on the web and select "Scan with UnDiffused".
 
 ---
 
-## 📦 Installation & Setup
+## 🚀 Easy Installation (For Everyone)
 
-### 1. Clone the Repository
+Since UnDiffused is currently in development, you can install it using Chrome's Developer Mode:
+
+1.  **Download the Code**: Click the green **Code** button at the top and select **Download ZIP**. Extract the folder to your desktop.
+2.  **Open Chrome Extensions**: Type `chrome://extensions/` in your browser address bar.
+3.  **Enable Developer Mode**: Turn on the switch in the top-right corner.
+4.  **Load the Extension**: Click **Load unpacked** and select the `dist` folder inside the extracted project directory.
+    *   *Note: If the `dist` folder is missing, see the Developer Setup section below.*
+5.  **Start Scanning**: You can now right-click any image on the web to start an analysis!
+
+---
+
+## 🛠️ Developer Setup (For Technical Users)
+
+If you want to build the project from scratch or contribute:
+
+### 1. Prerequisites
+- **Node.js**: [Download here](https://nodejs.org/) (Version 18 or higher recommended).
+- **Python**: [Download here](https://www.python.org/) (Version 3.9+ required for training scripts).
+
+### 2. Installation
 ```bash
-git clone https://github.com/your-repo/AI-Image-Checker.git
-cd AI-Image-Checker
-```
+# Clone the repository
+git clone https://github.com/AkshayReddyGujjula/UnDiffused-AI.git
+cd UnDiffused-AI
 
-### 2. Install Node Dependencies
-```bash
+# Install frontend dependencies
 npm install
-```
 
-### 3. Setup Python Environment (Optional)
-If you want to train the model or generate icons, install the Python requirements:
-```bash
+# Install python dependencies (for training/scripts)
 pip install -r requirements.txt
 ```
 
-### 4. Generate Icons
-If the `icons/` folder is empty, generate the extension icons using the provided script:
+### 3. Build & Run
 ```bash
-python scripts/generate_icons.py
-```
-
-### 5. Build the Extension
-Build the production-ready extension. This will create a `dist/` folder:
-```bash
+# Compile and build the extension
 npm run build
+
+# To run in development mode with hot-reload:
+npm run dev
 ```
 
----
-
-## 🔧 Loading the Extension in Chrome
-
-1.  Open Chrome and navigate to `chrome://extensions/`.
-2.  Enable **Developer mode** (toggle in the top right corner).
-3.  Click **Load unpacked**.
-4.  Navigate to your project directory and select the `dist` folder.
-5.  UnDiffused is now ready! Pin it to your toolbar for easy access.
+### 4. Training a Custom Model (Optional)
+The extension uses a pre-trained model. To train your own:
+1. Place your dataset in `C:\Users\...\DataSets\train` (or update `scripts/train.py`).
+2. Run: `python scripts/train.py`
+3. The new `model.onnx` will be automatically exported to the `public/` directory.
 
 ---
 
-## 🧠 Training the Model (Advance Users)
+## 🧠 Tech Stack
 
-The extension comes with a pre-trained model located in `public/model.onnx`. If you wish to retrain it:
-
-1.  **Download Dataset**: Obtain the [CIFAKE: Real and AI-Generated Images](https://www.kaggle.com/datasets/birdy654/cifake-real-and-ai-generated-fake-images) dataset.
-2.  **Configure Path**: Update the `DATASET_PATH` in `scripts/train.py` to point to your local dataset.
-3.  **Run Training**:
-    ```bash
-    python scripts/train.py
-    ```
-4.  The script will export a new `model.onnx` to the `public/` directory. Rebuild the extension after training.
+- **Frontend**: React 18, Tailwind CSS, TypeScript
+- **Bundler**: Vite + CRXJS (Vite Chrome Extension Plugin)
+- **AI Engine**: ONNX Runtime Web (WASM/WebGL)
+- **Model Architecture**: ResNet50 (Fine-tuned for synthetic image detection)
+- **Design**: "Liquid Glass" Frosted UI
 
 ---
 
-## 💻 Tech Stack
+## ⚖️ License
 
--   **Framework**: [Vite](https://vitejs.dev/) + [CRXJS](https://crxjs.dev/vite-plugin)
--   **Frontend**: [React](https://reactjs.org/) + [Tailwind CSS](https://tailwindcss.com/)
--   **AI Engine**: [ONNX Runtime Web](https://onnxruntime.ai/docs/tutorials/web/)
--   **Model Training**: Scikit-learn + OpenCV + skl2onnx
--   **Language**: TypeScript
-
----
-
-## 🛡️ License
-
-MIT License - feel free to use and contribute!
+Distributed under the MIT License. See `LICENSE` for more information.

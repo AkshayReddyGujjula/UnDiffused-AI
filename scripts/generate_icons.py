@@ -30,16 +30,26 @@ def create_icon(size):
 
 def main():
     sizes = [16, 48, 128]
-    output_dir = r"c:\Users\aksha\Desktop\Hackathons & Events\AI Ventures Hackathon Imperial\AI-Image-Checker\icons"
+    # Use relative path from the script location
+    # Assumes script is in /scripts and icons should be in /icons
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    output_dir = os.path.join(project_root, "icons")
     
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+        print(f"Created icons directory: {output_dir}")
         
     for size in sizes:
-        icon = create_icon(size)
-        filename = os.path.join(output_dir, f"icon{size}.png")
-        cv2.imwrite(filename, icon)
-        print(f"Generated {filename}")
+        # Create a simple colored square with text for now if cv2 fails or for simplicity
+        # But we'll try to use the create_icon logic
+        try:
+            icon = create_icon(size)
+            filename = os.path.join(output_dir, f"icon{size}.png")
+            cv2.imwrite(filename, icon)
+            print(f"Generated {filename}")
+        except Exception as e:
+            print(f"Failed to generate icon size {size}: {e}")
 
 if __name__ == "__main__":
     main()
