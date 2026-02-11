@@ -31,7 +31,7 @@ const TOOLS = [
     { icon: '📋', title: 'Metadata & EXIF', desc: 'Extracts hidden image data', tier: 2 as const, Component: MetadataTool },
 ];
 
-export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetImage, onBack, onClose, onMaximize }) => {
+export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetImage, onBack, onMaximize }) => {
     const [analyzedImage, setAnalyzedImage] = useState<string | null>(null);
     const [activeToolTitle, setActiveToolTitle] = useState<string | null>(null);
     const [sliderPosition, setSliderPosition] = useState(50);
@@ -57,28 +57,19 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                     <h2>Forensic Analysis</h2>
                 </div>
 
-                {analyzedImage ? (
-                    <button
-                        className="forensic-close-btn"
-                        onClick={() => activeToolTitle && onMaximize(analyzedImage, activeToolTitle)}
-                        aria-label="Maximize"
-                        title="Open in Fullscreen Viewer"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="15 3 21 3 21 9" />
-                            <polyline points="9 21 3 21 3 15" />
-                            <line x1="21" y1="3" x2="14" y2="10" />
-                            <line x1="3" y1="21" x2="10" y2="14" />
-                        </svg>
-                    </button>
-                ) : (
-                    <button className="forensic-close-btn" onClick={onClose} aria-label="Close">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                )}
+                <button
+                    className="forensic-close-btn"
+                    onClick={() => onMaximize(analyzedImage || targetImage, activeToolTitle || "Image Fullscreen")}
+                    aria-label="Maximize"
+                    title="Open in Fullscreen Viewer"
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 3 21 3 21 9" />
+                        <polyline points="9 21 3 21 3 15" />
+                        <line x1="21" y1="3" x2="14" y2="10" />
+                        <line x1="3" y1="21" x2="10" y2="14" />
+                    </svg>
+                </button>
             </div>
 
             {/* Comparison View */}
