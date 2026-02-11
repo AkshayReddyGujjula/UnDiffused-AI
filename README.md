@@ -66,20 +66,6 @@ npm run build
 
 ---
 
-## 🧠 Training the Model (Advance Users)
-
-The extension comes with a pre-trained model located in `public/model.onnx`. If you wish to retrain it:
-
-1.  **Download Dataset**: Obtain the [CIFAKE: Real and AI-Generated Images](https://www.kaggle.com/datasets/birdy654/cifake-real-and-ai-generated-fake-images) dataset.
-2.  **Configure Path**: Update the `DATASET_PATH` in `scripts/train.py` to point to your local dataset.
-3.  **Run Training**:
-    ```bash
-    python scripts/train.py
-    ```
-4.  The script will export a new `model.onnx` to the `public/` directory. Rebuild the extension after training.
-
----
-
 ## 💻 Tech Stack
 
 -   **Framework**: [Vite](https://vitejs.dev/) + [CRXJS](https://crxjs.dev/vite-plugin)
