@@ -107,29 +107,96 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ image, title, onClose 
 
     // --- Zoom (Wheel + Pinch) ---
     // --- Zoom (Wheel + Pinch) ---
-    // Use non-passive listener to prevent browser zoom
+    // --- Zoom (Wheel + Pinch) ---
     useEffect(() => {
+        const element = contentRef.current;
+        if (!element) return;
+
         const handleWheel = (e: WheelEvent) => {
             e.preventDefault();
             e.stopPropagation();
+
+            const rect = element.getBoundingClientRect();
+
+            // Mouse position relative to container center
+            const mRelativeX = e.clientX - rect.left - rect.width / 2;
+            const mRelativeY = e.clientY - rect.top - rect.height / 2;
 
             const zoomSensitivity = 0.001;
             const delta = -e.deltaY * zoomSensitivity;
 
             setTransform(prev => {
                 const newScale = Math.min(Math.max(0.1, prev.scale + delta * prev.scale * 5), 10);
-                return { ...prev, scale: newScale };
+
+                if (newScale === prev.scale) return prev;
+
+                const ratio = newScale / prev.scale;
+                const newX = mRelativeX - (mRelativeX - prev.x) * ratio;
+                const newY = mRelativeY - (mRelativeY - prev.y) * ratio;
+
+                return { scale: newScale, x: newX, y: newY };
             });
         };
 
-        const element = contentRef.current;
-        if (element) {
-            element.addEventListener('wheel', handleWheel, { passive: false });
-        }
-        return () => {
-            if (element) {
-                element.removeEventListener('wheel', handleWheel);
+        // Pinch-to-zoom for touch devices
+        let lastTouchDist = 0;
+        const handleTouchStart = (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                lastTouchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
             }
+        };
+
+        const handleTouchMove = (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+
+                const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+                const rect = element.getBoundingClientRect();
+                const mRelativeX = midX - rect.left - rect.width / 2;
+                const mRelativeY = midY - rect.top - rect.height / 2;
+
+                if (lastTouchDist > 0) {
+                    const zoomSensitivity = 0.01;
+                    const delta = (dist - lastTouchDist) * zoomSensitivity;
+
+                    setTransform(prev => {
+                        const newScale = Math.min(Math.max(0.1, prev.scale + delta * prev.scale), 10);
+                        if (newScale === prev.scale) return prev;
+                        const ratio = newScale / prev.scale;
+                        return {
+                            scale: newScale,
+                            x: mRelativeX - (mRelativeX - prev.x) * ratio,
+                            y: mRelativeY - (mRelativeY - prev.y) * ratio
+                        };
+                    });
+                }
+                lastTouchDist = dist;
+            }
+        };
+
+        const handleTouchEnd = () => {
+            lastTouchDist = 0;
+        };
+
+        element.addEventListener('wheel', handleWheel, { passive: false });
+        element.addEventListener('touchstart', handleTouchStart, { passive: false });
+        element.addEventListener('touchmove', handleTouchMove, { passive: false });
+        element.addEventListener('touchend', handleTouchEnd);
+
+        return () => {
+            element.removeEventListener('wheel', handleWheel);
+            element.removeEventListener('touchstart', handleTouchStart);
+            element.removeEventListener('touchmove', handleTouchMove);
+            element.removeEventListener('touchend', handleTouchEnd);
         };
     }, []);
 

@@ -1,8 +1,8 @@
 {
-  "../../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-Co7RaNQc.js",
+  "../../../../../@crx/manifest": {
+    "file": "assets/crx-manifest.js-D4ln-aHE.js",
     "name": "crx-manifest.js",
-    "src": "../../../../../../@crx/manifest",
+    "src": "../../../../../@crx/manifest",
     "isEntry": true
   },
   "_ResultView-BXWFaSCq.js": {
@@ -23,9 +23,9 @@
     "file": "assets/index-DNmJxR4N.css",
     "src": "_index-DNmJxR4N.css"
   },
-  "_index.tsx-loader-M-fFwMYp.js": {
-    "file": "assets/index.tsx-loader-M-fFwMYp.js",
-    "src": "_index.tsx-loader-M-fFwMYp.js"
+  "_index.tsx-loader-BK1yfcGL.js": {
+    "file": "assets/index.tsx-loader-BK1yfcGL.js",
+    "src": "_index.tsx-loader-BK1yfcGL.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -42,7 +42,7 @@
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-Dhco_R85.js",
+    "file": "assets/index.tsx-fF2dubFY.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,
