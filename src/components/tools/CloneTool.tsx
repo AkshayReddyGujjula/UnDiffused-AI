@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { ToolActionRow } from './ToolActionRow';
 
 interface CloneToolProps {
     targetImage: string;
@@ -171,10 +172,11 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage, onResult }) =
                     onChange={(e) => setMinRegion(Number(e.target.value))} />
             </div>
 
-            <button className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''}`}
-                onClick={analyse} disabled={isAnalysing}>
-                {isAnalysing ? 'Detecting...' : '🎯 Detect Clones'}
-            </button>
+            <ToolActionRow
+                label="Detect Clones"
+                onClick={analyse}
+                isAnalysing={isAnalysing}
+            />
 
             {cloneCount !== null && (
                 <div className="tool-output-area">

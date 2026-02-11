@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { ToolActionRow } from './ToolActionRow';
 
 interface HighlightToolProps {
     targetImage: string;
@@ -163,10 +164,11 @@ export const HighlightTool: React.FC<HighlightToolProps> = ({ targetImage, onRes
                     onChange={(e) => setSensitivity(Number(e.target.value))} />
             </div>
 
-            <button className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''}`}
-                onClick={analyse} disabled={isAnalysing}>
-                {isAnalysing ? 'Detecting...' : '✨ Detect Highlights'}
-            </button>
+            <ToolActionRow
+                label="Detect Highlights"
+                onClick={analyse}
+                isAnalysing={isAnalysing}
+            />
 
             {stats && (
                 <div className="tool-output-area">

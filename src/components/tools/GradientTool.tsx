@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { ToolActionRow } from './ToolActionRow';
 import { LiquidSelect } from '../LiquidSelect';
 
 interface GradientToolProps {
@@ -213,10 +214,11 @@ export const GradientTool: React.FC<GradientToolProps> = ({ targetImage, onResul
                     onChange={(e) => setThreshold(Number(e.target.value))} />
             </div>
 
-            <button className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''}`}
-                onClick={analyse} disabled={isAnalysing}>
-                {isAnalysing ? 'Analysing...' : '📐 Analyse Gradients'}
-            </button>
+            <ToolActionRow
+                label="Analyse Gradients"
+                onClick={analyse}
+                isAnalysing={isAnalysing}
+            />
 
             {stats && (
                 <div className="tool-output-area">

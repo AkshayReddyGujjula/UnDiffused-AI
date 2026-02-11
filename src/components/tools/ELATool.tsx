@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { LiquidSelect } from '../LiquidSelect';
+import { ToolActionRow } from './ToolActionRow';
 
 interface ELAToolProps {
     targetImage: string;
@@ -155,13 +156,11 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage, onResult }) => {
             </div>
 
             {/* Analyse button */}
-            <button
-                className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''} `}
+            <ToolActionRow
+                label="Analyse Error Levels"
                 onClick={analyse}
-                disabled={isAnalysing}
-            >
-                {isAnalysing ? 'Analysing...' : '🔬 Analyse Error Levels'}
-            </button>
+                isAnalysing={isAnalysing}
+            />
 
             {/* Stats */}
             {stats && (

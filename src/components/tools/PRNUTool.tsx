@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { ToolActionRow } from './ToolActionRow';
 import { LiquidSelect } from '../LiquidSelect';
 
 interface PRNUToolProps {
@@ -176,10 +177,11 @@ export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage, onResult }) => 
                 ⏱ Analysis may take a few seconds
             </p>
 
-            <button className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''}`}
-                onClick={analyse} disabled={isAnalysing}>
-                {isAnalysing ? 'Extracting PRNU...' : '📷 Extract PRNU'}
-            </button>
+            <ToolActionRow
+                label="Extract PRNU"
+                onClick={analyse}
+                isAnalysing={isAnalysing}
+            />
 
             {isAnalysing && (
                 <div className="tool-progress-bar" style={{ marginTop: 8 }}>

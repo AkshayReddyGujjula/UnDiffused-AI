@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { ToolActionRow } from './ToolActionRow';
 import { LiquidSelect } from '../LiquidSelect';
 
 interface NoiseToolProps {
@@ -156,10 +157,11 @@ export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage, onResult }) =
                     onChange={(e) => setBlockSize(Number(e.target.value))} />
             </div>
 
-            <button className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''}`}
-                onClick={analyse} disabled={isAnalysing}>
-                {isAnalysing ? 'Analysing...' : '📡 Analyse Noise'}
-            </button>
+            <ToolActionRow
+                label="Analyse Noise"
+                onClick={analyse}
+                isAnalysing={isAnalysing}
+            />
 
             {stats && (
                 <div className="tool-output-area">

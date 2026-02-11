@@ -23,9 +23,9 @@
     "file": "assets/index-DNmJxR4N.css",
     "src": "_index-DNmJxR4N.css"
   },
-  "_index.tsx-loader-BK1yfcGL.js": {
-    "file": "assets/index.tsx-loader-BK1yfcGL.js",
-    "src": "_index.tsx-loader-BK1yfcGL.js"
+  "_index.tsx-loader-Bs4cRKAJ.js": {
+    "file": "assets/index.tsx-loader-Bs4cRKAJ.js",
+    "src": "_index.tsx-loader-Bs4cRKAJ.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -42,7 +42,7 @@
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-fF2dubFY.js",
+    "file": "assets/index.tsx-C_aV2yuM.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,

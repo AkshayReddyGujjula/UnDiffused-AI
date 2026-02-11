@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { ToolActionRow } from './ToolActionRow';
 
 interface MetadataToolProps { targetImage: string; }
 
@@ -117,9 +118,11 @@ export const MetadataTool: React.FC<MetadataToolProps> = ({ targetImage }) => {
     };
 
     return (<div>
-        <button className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''}`} onClick={analyse} disabled={isAnalysing}>
-            {isAnalysing ? 'Extracting...' : '📋 Extract Metadata'}
-        </button>
+        <ToolActionRow
+            label="Extract Metadata"
+            onClick={analyse}
+            isAnalysing={isAnalysing}
+        />
         {metadata && (<div className="tool-output-area">
             {renderSection('Image Information', '📷', metadata.camera)}
             {renderSection('Properties', '⚙️', metadata.settings)}

@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { ToolActionRow } from './ToolActionRow';
 
 interface FFTToolProps {
     targetImage: string;
@@ -214,13 +215,11 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage, onResult }) => {
                 />
             </div>
 
-            <button
-                className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''} `}
+            <ToolActionRow
+                label="Generate Spectrum"
                 onClick={analyse}
-                disabled={isAnalysing}
-            >
-                {isAnalysing ? 'Analysing...' : '🌊 Generate Spectrum'}
-            </button>
+                isAnalysing={isAnalysing}
+            />
 
             {stats && (
                 <div className="tool-output-area">

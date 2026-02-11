@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { ToolActionRow } from './ToolActionRow';
 
 interface CompressionToolProps {
     targetImage: string;
@@ -122,9 +123,11 @@ export const CompressionTool: React.FC<CompressionToolProps> = ({ targetImage, o
                     <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Show 8×8 DCT block grid
                 </label>
             </div>
-            <button className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''}`} onClick={analyse} disabled={isAnalysing}>
-                {isAnalysing ? 'Analysing...' : '🔳 Analyse Compression'}
-            </button>
+            <ToolActionRow
+                label="Analyse Compression"
+                onClick={analyse}
+                isAnalysing={isAnalysing}
+            />
             {stats && (
                 <div className="tool-output-area">
                     <div className="tool-stat-label" style={{ textAlign: 'center', marginBottom: 0 }}>

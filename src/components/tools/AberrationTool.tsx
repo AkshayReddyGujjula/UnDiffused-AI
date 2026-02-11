@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { ToolActionRow } from './ToolActionRow';
 
 interface AberrationToolProps {
     targetImage: string;
@@ -152,10 +153,11 @@ export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage, onR
 
     return (
         <div>
-            <button className={`tool-analyse-btn ${isAnalysing ? 'tool-loading' : ''}`}
-                onClick={analyse} disabled={isAnalysing}>
-                {isAnalysing ? 'Checking...' : '🌈 Check for Aberration'}
-            </button>
+            <ToolActionRow
+                label="Check for Aberration"
+                onClick={analyse}
+                isAnalysing={isAnalysing}
+            />
 
             {stats && (
                 <div className="tool-output-area">

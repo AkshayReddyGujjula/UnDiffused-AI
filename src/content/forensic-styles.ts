@@ -367,28 +367,35 @@ const FORENSIC_STYLES = `
 
 /* Primary liquid analyse button */
 .tool-analyse-btn {
-    width: 100%;
-    padding: 12px 16px;
-    border-radius: 12px;
-    border: none;
-    /* Dark blue / Purple gradient */
-    background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 9999px; /* Pill shape */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    /* Frosted matte glass - more opaque */
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(12px) saturate(180%);
     color: #fff;
     font-size: 13px;
-    font-weight: 700; /* Bolder text */
+    font-weight: 700; /* Bold text */
     letter-spacing: 0.02em;
     cursor: pointer;
-    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     position: relative;
     overflow: hidden;
     font-family: inherit;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 .tool-analyse-btn:hover {
-    transform: translateY(-2px) scale(1.01);
-    box-shadow: 0 8px 20px rgba(147, 51, 234, 0.4);
-    filter: brightness(1.1);
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
 }
 
 .tool-analyse-btn:active {
@@ -400,6 +407,54 @@ const FORENSIC_STYLES = `
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Tool Action Row */
+.tool-action-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* Help Button */
+.tool-help-btn {
+    width: 42px; /* Matches height of analyse button roughly */
+    height: 42px; /* fallback, flex should handle height */
+    aspect-ratio: 1/1;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(12px) saturate(180%);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.tool-help-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-2px) rotate(10deg);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.tool-help-btn:active {
+    transform: translateY(0) scale(0.95);
+}
+
+.tool-help-icon {
+    transition: transform 0.3s ease;
+}
+
+.tool-help-btn:hover .tool-help-icon {
+    transform: scale(1.2);
 }
 
 /* ===== TOOL OUTPUT / RESULTS ===== */
