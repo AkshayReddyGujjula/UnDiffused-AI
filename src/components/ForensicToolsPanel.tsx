@@ -11,6 +11,11 @@ import { AberrationTool } from './tools/AberrationTool';
 import { CompressionTool } from './tools/CompressionTool';
 import { MetadataTool } from './tools/MetadataTool';
 import { fetchImageAsDataUrl } from '../utils/fetchImageAsDataUrl';
+import {
+    IconELA, IconNoise, IconClone, IconFFT, IconGradient,
+    IconPRNU, IconHighlights, IconAberration, IconCompression, IconMetadata,
+    IconImageAnalysis, IconToolSelect
+} from './icons/ForensicIcons';
 
 interface ForensicToolsPanelProps {
     targetImage: string;
@@ -20,16 +25,16 @@ interface ForensicToolsPanelProps {
 }
 
 const TOOLS = [
-    { icon: '🔬', title: 'Error Level Analysis', desc: 'Reveals compression inconsistencies', tier: 1 as const, Component: ELATool },
-    { icon: '📡', title: 'Noise Pattern Analysis', desc: 'Examines sensor noise distribution', tier: 1 as const, Component: NoiseTool },
-    { icon: '🎯', title: 'Clone Detection', desc: 'Identifies duplicated regions', tier: 1 as const, Component: CloneTool },
-    { icon: '🌊', title: 'Frequency Domain (FFT)', desc: 'Reveals hidden patterns in frequency space', tier: 1 as const, Component: FFTTool },
-    { icon: '📐', title: 'Luminance Gradient', desc: 'Examines edge patterns and textures', tier: 1 as const, Component: GradientTool },
-    { icon: '📷', title: 'PRNU Analysis', desc: 'Detects camera sensor fingerprint', tier: 1 as const, Component: PRNUTool },
-    { icon: '✨', title: 'Specular Highlights', desc: 'Analyses reflections for consistency', tier: 2 as const, Component: HighlightTool },
-    { icon: '🌈', title: 'Chromatic Aberration', desc: 'Detects lens color fringing', tier: 2 as const, Component: AberrationTool },
-    { icon: '🔳', title: 'Compression Artifacts', desc: 'Examines JPEG compression layers', tier: 2 as const, Component: CompressionTool },
-    { icon: '📋', title: 'Metadata & EXIF', desc: 'Extracts hidden image data', tier: 2 as const, Component: MetadataTool },
+    { icon: <IconELA size={20} />, title: 'Error Level Analysis', desc: 'Reveals compression inconsistencies', tier: 1 as const, Component: ELATool },
+    { icon: <IconNoise size={20} />, title: 'Noise Pattern Analysis', desc: 'Examines sensor noise distribution', tier: 1 as const, Component: NoiseTool },
+    { icon: <IconClone size={20} />, title: 'Clone Detection', desc: 'Identifies duplicated regions', tier: 1 as const, Component: CloneTool },
+    { icon: <IconFFT size={20} />, title: 'Frequency Domain (FFT)', desc: 'Reveals hidden patterns in frequency space', tier: 1 as const, Component: FFTTool },
+    { icon: <IconGradient size={20} />, title: 'Luminance Gradient', desc: 'Examines edge patterns and textures', tier: 1 as const, Component: GradientTool },
+    { icon: <IconPRNU size={20} />, title: 'PRNU Analysis', desc: 'Detects camera sensor fingerprint', tier: 1 as const, Component: PRNUTool },
+    { icon: <IconHighlights size={20} />, title: 'Specular Highlights', desc: 'Analyses reflections for consistency', tier: 2 as const, Component: HighlightTool },
+    { icon: <IconAberration size={20} />, title: 'Chromatic Aberration', desc: 'Detects lens color fringing', tier: 2 as const, Component: AberrationTool },
+    { icon: <IconCompression size={20} />, title: 'Compression Artifacts', desc: 'Examines JPEG compression layers', tier: 2 as const, Component: CompressionTool },
+    { icon: <IconMetadata size={20} />, title: 'Metadata & EXIF', desc: 'Extracts hidden image data', tier: 2 as const, Component: MetadataTool },
 ];
 
 export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetImage, onBack, onMaximize }) => {
@@ -76,8 +81,8 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                     <span>Back</span>
                 </button>
                 <div className="forensic-title">
-                    <span>🔍</span>
-                    <h2>Forensic Analysis</h2>
+                    <IconImageAnalysis size={24} color="#f1f5f9" />
+                    <h2>Image Analysis</h2>
                 </div>
 
                 <button
@@ -176,7 +181,7 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
 
             {!analyzedImage && (
                 <div className="forensic-section-title">
-                    <span>📊</span>
+                    <IconToolSelect size={20} color="#94a3b8" />
                     <h3>Select a tool to analyse</h3>
                 </div>
             )}

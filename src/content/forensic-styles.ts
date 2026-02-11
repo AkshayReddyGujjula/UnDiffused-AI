@@ -213,6 +213,7 @@ const FORENSIC_STYLES = `
     height: 36px;
     border-radius: 10px;
     background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(16, 185, 129, 0.15));
+    color: rgba(255, 255, 255, 0.9);
     display: flex;
     align-items: center;
     justify-content: center;

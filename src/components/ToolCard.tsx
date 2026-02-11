@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 interface ToolCardProps {
-    icon: string;
+    icon: React.ReactNode;
     title: string;
     description: string;
     tier: 1 | 2;
@@ -41,7 +41,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                 aria-label={`${title} - ${description}`}
             >
                 <div className="tool-card-icon">
-                    <span>{icon}</span>
+                    {icon}
                 </div>
                 <div className="tool-card-info">
                     <h3 className="tool-card-title">{title}</h3>

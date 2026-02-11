@@ -23,9 +23,9 @@
     "file": "assets/index-Dodk5KOK.css",
     "src": "_index-Dodk5KOK.css"
   },
-  "_index.tsx-loader-CFA70ECK.js": {
-    "file": "assets/index.tsx-loader-CFA70ECK.js",
-    "src": "_index.tsx-loader-CFA70ECK.js"
+  "_index.tsx-loader-ClR_jZwt.js": {
+    "file": "assets/index.tsx-loader-ClR_jZwt.js",
+    "src": "_index.tsx-loader-ClR_jZwt.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -42,7 +42,7 @@
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-D860Kk0e.js",
+    "file": "assets/index.tsx-BnzkEWng.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,
