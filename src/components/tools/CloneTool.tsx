@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ToolActionRow } from './ToolActionRow';
+import { ToolSlider } from './ToolSlider';
 
 interface CloneToolProps {
     targetImage: string;
@@ -162,13 +163,13 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage, onResult }) =
         <div>
             <div className="tool-control-group">
                 <label className="tool-control-label">Sensitivity: {sensitivity}</label>
-                <input type="range" className="tool-slider" min="1" max="10" value={sensitivity}
+                <ToolSlider min={1} max={10} value={sensitivity}
                     onChange={(e) => setSensitivity(Number(e.target.value))} />
             </div>
 
             <div className="tool-control-group">
                 <label className="tool-control-label">Min Region Size: {minRegion}px</label>
-                <input type="range" className="tool-slider" min="8" max="128" step="8" value={minRegion}
+                <ToolSlider min={8} max={128} step={8} value={minRegion}
                     onChange={(e) => setMinRegion(Number(e.target.value))} />
             </div>
 

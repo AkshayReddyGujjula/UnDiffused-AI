@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ToolActionRow } from './ToolActionRow';
+import { ToolSlider } from './ToolSlider';
 import { LiquidSelect } from '../LiquidSelect';
 
 interface NoiseToolProps {
@@ -153,7 +154,7 @@ export const NoiseTool: React.FC<NoiseToolProps> = ({ targetImage, onResult }) =
 
             <div className="tool-control-group">
                 <label className="tool-control-label">Block Size: {blockSize}px</label>
-                <input type="range" className="tool-slider" min="8" max="64" step="8" value={blockSize}
+                <ToolSlider min={8} max={64} step={8} value={blockSize}
                     onChange={(e) => setBlockSize(Number(e.target.value))} />
             </div>
 

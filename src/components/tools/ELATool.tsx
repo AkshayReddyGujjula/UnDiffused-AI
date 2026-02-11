@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { LiquidSelect } from '../LiquidSelect';
 import { ToolActionRow } from './ToolActionRow';
+import { ToolSlider } from './ToolSlider';
 
 interface ELAToolProps {
     targetImage: string;
@@ -131,11 +132,9 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage, onResult }) => {
             {/* Quality slider */}
             <div className="tool-control-group">
                 <label className="tool-control-label">JPEG Quality: {quality}%</label>
-                <input
-                    type="range"
-                    className="tool-slider"
-                    min="50"
-                    max="100"
+                <ToolSlider
+                    min={50}
+                    max={100}
                     value={quality}
                     onChange={(e) => setQuality(Number(e.target.value))}
                 />

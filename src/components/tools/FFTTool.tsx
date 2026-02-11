@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ToolActionRow } from './ToolActionRow';
+import { ToolSlider } from './ToolSlider';
 
 interface FFTToolProps {
     targetImage: string;
@@ -204,12 +205,10 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage, onResult }) => {
         <div>
             <div className="tool-control-group">
                 <label className="tool-control-label">Log Scale Factor: {scale}</label>
-                <input
-                    type="range"
-                    className="tool-slider"
-                    min="1"
-                    max="10"
-                    step="0.1"
+                <ToolSlider
+                    min={1}
+                    max={10}
+                    step={0.1}
                     value={scale}
                     onChange={(e) => setScale(Number(e.target.value))}
                 />

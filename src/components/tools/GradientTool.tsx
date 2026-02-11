@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { ToolActionRow } from './ToolActionRow';
+import { ToolSlider } from './ToolSlider';
 import { LiquidSelect } from '../LiquidSelect';
 
 interface GradientToolProps {
@@ -210,7 +211,7 @@ export const GradientTool: React.FC<GradientToolProps> = ({ targetImage, onResul
 
             <div className="tool-control-group">
                 <label className="tool-control-label">Threshold: {threshold}</label>
-                <input type="range" className="tool-slider" min="20" max="300" value={threshold}
+                <ToolSlider min={20} max={300} value={threshold}
                     onChange={(e) => setThreshold(Number(e.target.value))} />
             </div>
 

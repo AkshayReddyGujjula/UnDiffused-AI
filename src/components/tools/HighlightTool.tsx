@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ToolActionRow } from './ToolActionRow';
+import { ToolSlider } from './ToolSlider';
 
 interface HighlightToolProps {
     targetImage: string;
@@ -160,7 +161,7 @@ export const HighlightTool: React.FC<HighlightToolProps> = ({ targetImage, onRes
         <div>
             <div className="tool-control-group">
                 <label className="tool-control-label">Sensitivity: {sensitivity}</label>
-                <input type="range" className="tool-slider" min="1" max="10" value={sensitivity}
+                <ToolSlider min={1} max={10} value={sensitivity}
                     onChange={(e) => setSensitivity(Number(e.target.value))} />
             </div>
 

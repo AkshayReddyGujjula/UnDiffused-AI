@@ -28,7 +28,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
 
     return (
         <div
-            className="tool-card"
+            className={`tool-card ${isExpanded ? 'tool-card-expanded' : ''}`}
             style={{
                 animationDelay: `${index * 80}ms`
             }}

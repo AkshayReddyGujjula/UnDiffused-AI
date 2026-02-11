@@ -169,8 +169,9 @@ const FORENSIC_STYLES = `
 
 /* ===== TOOL CARD ===== */
 .tool-card {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 14px;
     overflow: hidden;
     transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -178,11 +179,18 @@ const FORENSIC_STYLES = `
     position: relative;
 }
 
-.tool-card:hover {
-    background: rgba(255, 255, 255, 0.1);
+.tool-card:not(.tool-card-expanded):hover {
+    background: rgba(255, 255, 255, 0.25);
     border-color: rgba(56, 189, 248, 0.25);
     transform: translateY(-2px) scale(1.01);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(56, 189, 248, 0.15);
+}
+
+.tool-card-expanded {
+    background: rgba(255, 255, 255, 0.15); /* Keep base opacity */
+    transform: none !important; /* Prevent scale on hover/active */
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4) !important; /* Keeps shadow consistent for open card */
+    border-color: rgba(56, 189, 248, 0.3); /* Slightly highlighted border when open */
 }
 
 /* Card Header */
@@ -219,15 +227,15 @@ const FORENSIC_STYLES = `
 }
 
 .tool-card-title {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     color: #f1f5f9;
-    margin: 0 0 2px 0;
+    margin: 0 0 4px 0;
     line-height: 1.3;
 }
 
 .tool-card-desc {
-    font-size: 11px;
+    font-size: 13px;
     color: #94a3b8;
     margin: 0;
     line-height: 1.3;
@@ -289,7 +297,8 @@ const FORENSIC_STYLES = `
 
 .tool-card-placeholder p {
     font-size: 12px;
-    color: #64748b;
+    font-weight: 700;
+    color: #fff;
     margin: 0;
 }
 
@@ -300,8 +309,8 @@ const FORENSIC_STYLES = `
 
 .tool-control-label {
     font-size: 11px;
-    font-weight: 500;
-    color: #94a3b8;
+    font-weight: 700;
+    color: #fff;
     margin-bottom: 6px;
     display: block;
 }
@@ -489,8 +498,8 @@ const FORENSIC_STYLES = `
 
 .tool-stat-label {
     font-size: 10px;
-    font-weight: 500;
-    color: #64748b;
+    font-weight: 700;
+    color: #fff;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin: 0 0 4px 0;
@@ -793,14 +802,17 @@ const FORENSIC_STYLES = `
 
 .metadata-key {
     font-size: 12px;
-    color: #94a3b8;
+    color: #fff;
+    font-weight: 700;
 }
 
 .metadata-value {
     font-size: 12px;
-    color: #f1f5f9;
-    font-weight: 500;
+    color: #fff;
+    font-weight: 700;
     text-align: right;
+    word-break: break-all;
+    max-width: 60%;
 }
 
 .metadata-missing {
