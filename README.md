@@ -64,12 +64,6 @@ npm run build
 npm run dev
 ```
 
-### 4. Training a Custom Model (Optional)
-The extension uses a pre-trained model. To train your own:
-1. Place your dataset in `C:\Users\...\DataSets\train` (or update `scripts/train.py`).
-2. Run: `python scripts/train.py`
-3. The new `model.onnx` will be automatically exported to the `public/` directory.
-
 ---
 
 ## 🧠 Tech Stack
