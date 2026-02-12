@@ -24,7 +24,7 @@ let session: ort.InferenceSession | null = null;
 async function initSession(): Promise<ort.InferenceSession> {
     if (session) return session;
 
-    const modelUrl = chrome.runtime.getURL('model.onnx');
+    const modelUrl = chrome.runtime.getURL('models/model_quantized.onnx');
     session = await ort.InferenceSession.create(modelUrl, {
         executionProviders: ['wasm'],
     });
