@@ -18,12 +18,9 @@ const TAILWIND_STYLES = `
   --tw-content: '';
 }
 
-/* ===== CUSTOM FONTS ===== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
 /* ===== BASE STYLES ===== */
 #undiffused-app {
-  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'system-ui', sans-serif;
+  font-family: 'Segoe UI', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'system-ui', sans-serif;
   font-feature-settings: normal;
   font-variation-settings: normal;
   -webkit-font-smoothing: antialiased;
@@ -136,7 +133,7 @@ const TAILWIND_STYLES = `
 .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
 .font-medium { font-weight: 500; }
 .font-semibold { font-weight: 600; }
-.font-sans { font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'system-ui', sans-serif; }
+.font-sans { font-family: 'Segoe UI', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'system-ui', sans-serif; }
 .tracking-wide { letter-spacing: 0.025em; }
 .tracking-wider { letter-spacing: 0.05em; }
 .uppercase { text-transform: uppercase; }

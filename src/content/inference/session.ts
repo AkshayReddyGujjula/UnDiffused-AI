@@ -1,7 +1,12 @@
 import * as ort from 'onnxruntime-web';
 
 // Initialize WASM paths immediately
-ort.env.wasm.wasmPaths = chrome.runtime.getURL('wasm/');
+ort.env.wasm.wasmPaths = {
+    'ort-wasm.wasm': chrome.runtime.getURL('wasm/ort-wasm.wasm'),
+    'ort-wasm-simd.wasm': chrome.runtime.getURL('wasm/ort-wasm-simd.wasm'),
+    'ort-wasm-threaded.wasm': chrome.runtime.getURL('wasm/ort-wasm-threaded.wasm'),
+    'ort-wasm-simd-threaded.wasm': chrome.runtime.getURL('wasm/ort-wasm-simd-threaded.wasm'),
+};
 ort.env.wasm.numThreads = 1; // Strict single-threading for content script stability
 ort.env.wasm.simd = true;
 

@@ -4,6 +4,42 @@
  * Handles context menu, offscreen document lifecycle, and message routing.
  */
 
+type FetchImageMessage = {
+    type: 'FETCH_IMAGE_AS_DATA_URL';
+    url: string;
+};
+
+type TriggerScanMessage = {
+    type: 'TRIGGER_SCAN_FROM_POPUP';
+    url: string;
+};
+
+type BackgroundMessage = FetchImageMessage | TriggerScanMessage;
+
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'data:', 'blob:']);
+
+function isBackgroundMessage(message: unknown): message is BackgroundMessage {
+    if (!message || typeof message !== 'object') return false;
+    const candidate = message as Partial<BackgroundMessage>;
+    return (
+        (candidate.type === 'FETCH_IMAGE_AS_DATA_URL' || candidate.type === 'TRIGGER_SCAN_FROM_POPUP') &&
+        typeof candidate.url === 'string'
+    );
+}
+
+function isValidImageUrl(rawUrl: string): boolean {
+    if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) {
+        return true;
+    }
+
+    try {
+        const parsed = new URL(rawUrl);
+        return ALLOWED_PROTOCOLS.has(parsed.protocol);
+    } catch {
+        return false;
+    }
+}
+
 
 
 /**
@@ -48,12 +84,27 @@ chrome.contextMenus.onClicked.addListener(handleContextMenuClick);
 
 // Listen for messages from popup
 // Listen for messages from popup
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (sender.id && sender.id !== chrome.runtime.id) {
+        sendResponse({ success: false, error: 'Unauthorized sender' });
+        return;
+    }
+
+    if (!isBackgroundMessage(message)) {
+        sendResponse({ success: false, error: 'Invalid message format' });
+        return;
+    }
+
     // Fetch image and convert to data URL (CORS bypass for content scripts)
     if (message.type === 'FETCH_IMAGE_AS_DATA_URL') {
         const imageUrl = message.url;
-        if (!imageUrl) {
-            sendResponse({ success: false, error: 'No URL provided' });
+        if (!isValidImageUrl(imageUrl)) {
+            sendResponse({ success: false, error: 'Invalid URL provided' });
+            return;
+        }
+
+        if (imageUrl.startsWith('data:')) {
+            sendResponse({ success: true, dataUrl: imageUrl });
             return;
         }
 
@@ -86,6 +137,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     // Handle scan trigger from extension popup
     if (message.type === 'TRIGGER_SCAN_FROM_POPUP') {
         const dataUrl = message.url;
+        if (!isValidImageUrl(dataUrl)) {
+            sendResponse({ success: false, error: 'Invalid URL provided' });
+            return;
+        }
 
         // Get the active tab
         chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {

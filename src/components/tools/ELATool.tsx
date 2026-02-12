@@ -15,14 +15,14 @@ interface ELAToolProps {
  * pixel-wise absolute difference to reveal compression inconsistencies.
  */
 export const ELATool: React.FC<ELAToolProps> = ({ targetImage, onResult }) => {
-    const [quality, setQuality] = useState(85);
+    const [quality, setQuality] = useState(95);
     const [sensitivity, setSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
     const [isAnalysing, setIsAnalysing] = useState(false);
 
     // Stats for local display
     const [stats, setStats] = useState<{ diffScore: number } | null>(null);
 
-    const sensitivityMultiplier = sensitivity === 'low' ? 10 : sensitivity === 'medium' ? 20 : 40;
+    const sensitivityMultiplier = sensitivity === 'low' ? 16 : sensitivity === 'medium' ? 28 : 40;
 
     const analyse = useCallback(async () => {
         setIsAnalysing(true);
@@ -60,8 +60,9 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage, onResult }) => {
 
             // Load re-compressed
             const recompImg = new Image();
-            await new Promise<void>((resolve) => {
+            await new Promise<void>((resolve, reject) => {
                 recompImg.onload = () => resolve();
+                recompImg.onerror = () => reject(new Error('Failed to decode recompressed JPEG'));
                 recompImg.src = jpegDataUrl;
             });
 
@@ -75,6 +76,9 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage, onResult }) => {
             const ctx = resultCanvas.getContext('2d')!;
             const outData = ctx.createImageData(w, h);
 
+            // Histogram of per-pixel residual intensity for robust scaling.
+            const histogram = new Uint32Array(256);
+            const residuals = new Uint16Array(w * h);
             let totalDiff = 0;
 
             for (let i = 0; i < originalData.data.length; i += 4) {
@@ -82,33 +86,53 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage, onResult }) => {
                 const dg = Math.abs(originalData.data[i + 1] - recompData.data[i + 1]);
                 const db = Math.abs(originalData.data[i + 2] - recompData.data[i + 2]);
 
-                totalDiff += dr + dg + db;
+                const residual = Math.round((dr + dg + db) / 3);
+                residuals[i >> 2] = residual;
+                histogram[residual] += 1;
+                totalDiff += residual;
+            }
 
-                // Amplify differences
-                const r = Math.min(255, dr * sensitivityMultiplier);
-                const g = Math.min(255, dg * sensitivityMultiplier);
-                const b = Math.min(255, db * sensitivityMultiplier);
-
-                // Heat map coloring
-                const intensity = (r + g + b) / 3;
-                if (intensity < 64) {
-                    outData.data[i] = 0;
-                    outData.data[i + 1] = 0;
-                    outData.data[i + 2] = Math.min(255, intensity * 4);
-                } else if (intensity < 128) {
-                    outData.data[i] = 0;
-                    outData.data[i + 1] = Math.min(255, (intensity - 64) * 4);
-                    outData.data[i + 2] = 255 - (intensity - 64) * 4;
-                } else if (intensity < 192) {
-                    outData.data[i] = Math.min(255, (intensity - 128) * 4);
-                    outData.data[i + 1] = 255;
-                    outData.data[i + 2] = 0;
-                } else {
-                    outData.data[i] = 255;
-                    outData.data[i + 1] = 255 - (intensity - 192) * 4;
-                    outData.data[i + 2] = 0;
+            // Robust normalizer: 95th percentile keeps extreme spikes from washing out map contrast.
+            const totalPixels = w * h;
+            const p95Target = Math.floor(totalPixels * 0.95);
+            let cumulative = 0;
+            let p95 = 1;
+            for (let v = 0; v < histogram.length; v++) {
+                cumulative += histogram[v];
+                if (cumulative >= p95Target) {
+                    p95 = Math.max(1, v);
+                    break;
                 }
-                outData.data[i + 3] = 255;
+            }
+
+            for (let i = 0; i < residuals.length; i++) {
+                const idx = i * 4;
+                const boosted = Math.min(1, (residuals[i] * sensitivityMultiplier) / (p95 * 28));
+                const gammaEnhanced = Math.pow(boosted, 0.65);
+
+                // Forensic palette: black -> red -> orange -> yellow -> white.
+                let r = 0;
+                let g = 0;
+                let b = 0;
+                if (gammaEnhanced < 0.25) {
+                    r = Math.floor((gammaEnhanced / 0.25) * 180);
+                } else if (gammaEnhanced < 0.5) {
+                    r = Math.floor(180 + ((gammaEnhanced - 0.25) / 0.25) * 75);
+                    g = Math.floor(((gammaEnhanced - 0.25) / 0.25) * 80);
+                } else if (gammaEnhanced < 0.75) {
+                    r = 255;
+                    g = Math.floor(80 + ((gammaEnhanced - 0.5) / 0.25) * 120);
+                    b = Math.floor(((gammaEnhanced - 0.5) / 0.25) * 30);
+                } else {
+                    r = 255;
+                    g = Math.floor(200 + ((gammaEnhanced - 0.75) / 0.25) * 55);
+                    b = Math.floor(30 + ((gammaEnhanced - 0.75) / 0.25) * 225);
+                }
+
+                outData.data[idx] = r;
+                outData.data[idx + 1] = g;
+                outData.data[idx + 2] = b;
+                outData.data[idx + 3] = 255;
             }
 
             ctx.putImageData(outData, 0, 0);
@@ -118,7 +142,7 @@ export const ELATool: React.FC<ELAToolProps> = ({ targetImage, onResult }) => {
                 onResult(resultCanvas);
             }
 
-            setStats({ diffScore: totalDiff / (w * h) });
+            setStats({ diffScore: totalDiff / totalPixels });
 
         } catch (err) {
             console.error('[ELA] Analysis failed:', err);

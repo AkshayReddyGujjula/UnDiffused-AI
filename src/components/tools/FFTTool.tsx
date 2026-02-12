@@ -72,8 +72,8 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage, onResult }) => {
                 img.src = targetImage;
             });
 
-            // Use power of 2 size for FFT stability
-            const size = 512;
+            // Use power-of-two working size for stable FFT while keeping UI responsive.
+            const size = 256;
             const canvas = document.createElement('canvas');
             canvas.width = size;
             canvas.height = size;
@@ -144,17 +144,52 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage, onResult }) => {
                 }
             }
 
-            // Simple stats based on magnitude distribution
-            const centerMag = magnitude[center * size + center];
-            const highFreqMag = magnitude[0]; // Corner (high freq after shift)
-            const highPct = (highFreqMag / maxMag) * 100;
-            const lowPct = (centerMag / maxMag) * 100;
+            // Radial band energy statistics.
+            let lowEnergy = 0;
+            let highEnergy = 0;
+            let totalEnergy = 0;
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const dx = x - center;
+                    const dy = y - center;
+                    const rNorm = Math.hypot(dx, dy) / center;
+                    const value = magnitude[y * size + x];
 
-            // Detect grid artifacts (peaks at regular intervals)
+                    totalEnergy += value;
+                    if (rNorm < 0.15) lowEnergy += value;
+                    if (rNorm >= 0.5) highEnergy += value;
+                }
+            }
+
+            const lowPct = totalEnergy > 0 ? (lowEnergy / totalEnergy) * 100 : 0;
+            const highPct = totalEnergy > 0 ? (highEnergy / totalEnergy) * 100 : 0;
+
+            // Detect periodic grid-like peaks along center row/column.
+            const centerRow = Math.floor(center);
+            const centerCol = Math.floor(center);
             let gridScore = 0;
-            for (let i = 1; i < 4; i++) {
-                const px = center + i * (size / 8);
-                if (px < size && magnitude[center * size + px] > magnitude[center * size + px - 1] * 1.5) {
+            for (let o = 12; o < center - 4; o++) {
+                const rowPos = magnitude[centerRow * size + (centerCol + o)];
+                const rowNeg = magnitude[centerRow * size + (centerCol - o)];
+                const colPos = magnitude[(centerRow + o) * size + centerCol];
+                const colNeg = magnitude[(centerRow - o) * size + centerCol];
+
+                const rowNeighbor = (
+                    magnitude[centerRow * size + (centerCol + o - 1)] +
+                    magnitude[centerRow * size + (centerCol + o + 1)] +
+                    magnitude[centerRow * size + (centerCol - o - 1)] +
+                    magnitude[centerRow * size + (centerCol - o + 1)]
+                ) / 4;
+                const colNeighbor = (
+                    magnitude[(centerRow + o - 1) * size + centerCol] +
+                    magnitude[(centerRow + o + 1) * size + centerCol] +
+                    magnitude[(centerRow - o - 1) * size + centerCol] +
+                    magnitude[(centerRow - o + 1) * size + centerCol]
+                ) / 4;
+
+                const rowPeak = rowPos > rowNeighbor * 1.8 && rowNeg > rowNeighbor * 1.8;
+                const colPeak = colPos > colNeighbor * 1.8 && colNeg > colNeighbor * 1.8;
+                if (rowPeak && colPeak) {
                     gridScore++;
                 }
             }
@@ -192,7 +227,7 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage, onResult }) => {
                 onResult(resultCanvas);
             }
 
-            setStats({ highFreq: highPct, lowFreq: lowPct, gridArtifacts: gridScore > 3 });
+            setStats({ highFreq: highPct, lowFreq: lowPct, gridArtifacts: gridScore >= 3 });
 
         } catch (err) {
             console.error('[FFT] Analysis failed:', err);

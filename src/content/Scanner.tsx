@@ -3,7 +3,7 @@ import { GlassCard } from '../components/GlassCard';
 import { ResultView, ScanResult } from '../components/ResultView';
 import { ForensicToolsPanel } from '../components/ForensicToolsPanel';
 import { ImageViewer } from '../components/ImageViewer';
-import { runMultiCropInference } from './inference/pipeline';
+import { runMultiCropInference, cancelAllInferences } from './inference/pipeline';
 import { fetchImageViaBackground } from './inference/imageLoader';
 
 type ScanState = 'idle' | 'scanning' | 'result' | 'tools' | 'error';
@@ -27,8 +27,15 @@ export const Scanner: React.FC = () => {
 
     // Cache the bitmap to re-use for Deep Scan
     const imageBitmapRef = useRef<ImageBitmap | null>(null);
+    const scanTokenRef = useRef(0);
+    const isShuttingDownRef = useRef(false);
 
     const runScan = async (url: string, mode: 'default' | 'deep') => {
+        if (isShuttingDownRef.current) {
+            return;
+        }
+        const scanToken = ++scanTokenRef.current;
+
         try {
             if (mode === 'default') {
                 setState('scanning');
@@ -65,6 +72,10 @@ export const Scanner: React.FC = () => {
             const end = performance.now();
 
             res.inferenceTime = end - start;
+            if (scanToken !== scanTokenRef.current) {
+                return;
+            }
+
             setResult({
                 isAI: res.isAI,
                 confidence: res.confidence,
@@ -75,6 +86,9 @@ export const Scanner: React.FC = () => {
             setIsDeepScanning(false);
 
         } catch (e: any) {
+            if (scanToken !== scanTokenRef.current) {
+                return;
+            }
             console.error('[UnDiffused] Analysis failed:', e);
             setError(e.message || 'Failed to analyze image');
             setState('error');
@@ -84,18 +98,32 @@ export const Scanner: React.FC = () => {
     };
 
     useEffect(() => {
-        const handleMessage = async (message: {
-            type: string;
-            imageUrl?: string;
-        }) => {
-            if (message.type === 'SCANNING' && message.imageUrl) {
-                setTargetImage(message.imageUrl);
+        const handleMessage = async (
+            message: unknown,
+            sender: chrome.runtime.MessageSender
+        ) => {
+            if (sender.id && sender.id !== chrome.runtime.id) {
+                return;
+            }
+            if (!message || typeof message !== 'object') {
+                return;
+            }
+
+            const typed = message as { type?: string; imageUrl?: string };
+            if (typeof typed.type !== 'string') {
+                return;
+            }
+
+            if (typed.type === 'SCANNING' && typeof typed.imageUrl === 'string') {
+                isShuttingDownRef.current = false;
+                scanTokenRef.current += 1;
+                setTargetImage(typed.imageUrl);
                 setResult(null);
                 setError(null);
                 // Reset cache on new scan
                 imageBitmapRef.current = null;
-                runScan(message.imageUrl, 'default');
-            } else if (message.type === 'ERROR') {
+                runScan(typed.imageUrl, 'default');
+            } else if (typed.type === 'ERROR') {
                 setState('error');
                 setError('An error occurred in background');
             }
@@ -138,10 +166,15 @@ export const Scanner: React.FC = () => {
     };
 
     const handleClose = () => {
+        isShuttingDownRef.current = true;
+        scanTokenRef.current += 1;
+        cancelAllInferences('User closed scanner');
         setState('idle');
         setResult(null);
         setError(null);
         setTargetImage(null);
+        setIsDeepScanning(false);
+        setProgress(0);
         setPosition(null);
         setViewingImage(null);
         imageBitmapRef.current = null;

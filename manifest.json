@@ -9,12 +9,12 @@
         "128": "icons/icon128.png"
     },
     "permissions": [
-        "offscreen",
         "contextMenus",
         "activeTab"
     ],
     "host_permissions": [
-        "<all_urls>"
+        "https://*/*",
+        "http://*/*"
     ],
     "action": {
         "default_popup": "src/popup/popup.html"
@@ -26,7 +26,8 @@
     "content_scripts": [
         {
             "matches": [
-                "<all_urls>"
+                "https://*/*",
+                "http://*/*"
             ],
             "js": [
                 "src/content/index.tsx"
@@ -42,11 +43,15 @@
             "resources": [
                 "models/model_quantized.onnx",
                 "wasm/ort-wasm-simd.wasm",
-                "wasm/ort-wasm.wasm"
+                "wasm/ort-wasm.wasm",
+                "wasm/ort-wasm-threaded.wasm",
+                "wasm/ort-wasm-simd-threaded.wasm"
             ],
             "matches": [
-                "<all_urls>"
-            ]
+                "https://*/*",
+                "http://*/*"
+            ],
+            "use_dynamic_url": true
         }
     ]
 }

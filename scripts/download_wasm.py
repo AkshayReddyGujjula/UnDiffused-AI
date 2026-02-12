@@ -2,7 +2,8 @@ import requests
 import os
 
 WASM_DIR = "public/wasm"
-VERSION = "1.21.0"
+# Keep this aligned with package.json onnxruntime-web dependency.
+VERSION = "1.18.0"
 FILES = [
     "ort-wasm.wasm",
     "ort-wasm-simd.wasm",

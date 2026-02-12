@@ -10,6 +10,8 @@ const PATCH_SIZE = 224;
  */
 export function generateDefaultCrops(width: number, height: number): CropRect[] {
     const crops: CropRect[] = [];
+    const cropW = Math.min(PATCH_SIZE, width);
+    const cropH = Math.min(PATCH_SIZE, height);
 
     // 1. Global (conceptually matches the whole image, preprocessor will resize it)
     crops.push({
@@ -31,21 +33,21 @@ export function generateDefaultCrops(width: number, height: number): CropRect[] 
     crops.push({
         x: centerX,
         y: centerY,
-        width: PATCH_SIZE,
-        height: PATCH_SIZE,
+        width: cropW,
+        height: cropH,
         label: 'Center'
     });
 
     // 3. Four Corners
     // Top-Left
-    crops.push({ x: 0, y: 0, width: PATCH_SIZE, height: PATCH_SIZE, label: 'Top-Left' });
+    crops.push({ x: 0, y: 0, width: cropW, height: cropH, label: 'Top-Left' });
 
     // Top-Right
     crops.push({
         x: Math.max(0, width - PATCH_SIZE),
         y: 0,
-        width: PATCH_SIZE,
-        height: PATCH_SIZE,
+        width: cropW,
+        height: cropH,
         label: 'Top-Right'
     });
 
@@ -53,8 +55,8 @@ export function generateDefaultCrops(width: number, height: number): CropRect[] 
     crops.push({
         x: 0,
         y: Math.max(0, height - PATCH_SIZE),
-        width: PATCH_SIZE,
-        height: PATCH_SIZE,
+        width: cropW,
+        height: cropH,
         label: 'Bottom-Left'
     });
 
@@ -62,8 +64,8 @@ export function generateDefaultCrops(width: number, height: number): CropRect[] 
     crops.push({
         x: Math.max(0, width - PATCH_SIZE),
         y: Math.max(0, height - PATCH_SIZE),
-        width: PATCH_SIZE,
-        height: PATCH_SIZE,
+        width: cropW,
+        height: cropH,
         label: 'Bottom-Right'
     });
 
@@ -75,17 +77,25 @@ export function generateDefaultCrops(width: number, height: number): CropRect[] 
  */
 export function generateDeepScanTiles(width: number, height: number): CropRect[] {
     const crops: CropRect[] = [];
-
-    const tilesX = Math.floor(width / PATCH_SIZE);
-    const tilesY = Math.floor(height / PATCH_SIZE);
+    const seen = new Set<string>();
+    const cropW = Math.min(PATCH_SIZE, width);
+    const cropH = Math.min(PATCH_SIZE, height);
+    const tilesX = Math.max(1, Math.ceil(width / PATCH_SIZE));
+    const tilesY = Math.max(1, Math.ceil(height / PATCH_SIZE));
 
     for (let y = 0; y < tilesY; y++) {
         for (let x = 0; x < tilesX; x++) {
+            const tileX = Math.min(x * PATCH_SIZE, Math.max(0, width - cropW));
+            const tileY = Math.min(y * PATCH_SIZE, Math.max(0, height - cropH));
+            const key = `${tileX}:${tileY}:${cropW}:${cropH}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+
             crops.push({
-                x: x * PATCH_SIZE,
-                y: y * PATCH_SIZE,
-                width: PATCH_SIZE,
-                height: PATCH_SIZE,
+                x: tileX,
+                y: tileY,
+                width: cropW,
+                height: cropH,
                 label: `Tile ${x},${y}`
             });
         }

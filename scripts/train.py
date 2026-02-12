@@ -182,8 +182,9 @@ def train():
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-2)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
     
-    # Mixed Precision Scaler for faster training
-    scaler = torch.amp.GradScaler('cuda')
+    # Mixed Precision Scaler for faster training on CUDA
+    use_cuda_amp = device.type == 'cuda'
+    scaler = torch.amp.GradScaler('cuda', enabled=use_cuda_amp)
     
     print(f"\n[INFO] Initializing training loop (AMP Enabled)...")
     start_time = time.time()
@@ -205,8 +206,8 @@ def train():
             
             optimizer.zero_grad()
             
-            # Use autocast for mixed precision
-            with torch.amp.autocast('cuda'):
+            # Use autocast for mixed precision on CUDA; no-op on CPU
+            with torch.amp.autocast('cuda', enabled=use_cuda_amp):
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
             
@@ -270,12 +271,9 @@ def train():
     print("\n[INFO] Loading best model for final export...")
     model.load_state_dict(torch.load('best_model.pth', weights_only=True))
     
-    # Re-add Sigmoid layer for the ONNX export so the Chrome extension 
-    # continues to get probabilities (0-1) instead of raw logits.
-    export_model = nn.Sequential(
-        model,
-        nn.Sigmoid()
-    ).to(device)
+    # Keep raw model outputs for ONNX export.
+    # Runtime code can handle either logits or probabilities.
+    export_model = model.to(device)
     export_model.eval()
     
     # Export to ONNX
@@ -290,9 +288,9 @@ def train():
         export_params=True,
         opset_version=12,
         do_constant_folding=True,
-        input_names=['input'],
-        output_names=['output'],
-        dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}}
+        input_names=['pixel_values'],
+        output_names=['logits'],
+        dynamic_axes={'pixel_values': {0: 'batch_size'}, 'logits': {0: 'batch_size'}}
     )
     print(f"[SUCCESS] High-fidelity model exported to: {output_path}")
 

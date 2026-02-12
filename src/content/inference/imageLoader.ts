@@ -2,6 +2,12 @@
  * Helper to fetch image via background script to bypass CORS.
  */
 export async function fetchImageViaBackground(url: string): Promise<ImageBitmap> {
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        return createImageBitmap(blob);
+    }
+
     return new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({
             type: 'FETCH_IMAGE_AS_DATA_URL',

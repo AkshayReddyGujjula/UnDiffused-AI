@@ -19,7 +19,7 @@ export default {
                 },
             },
             fontFamily: {
-                sans: ['Inter', 'SF Pro Display', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+                sans: ['Segoe UI', 'SF Pro Display', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
             },
             backdropBlur: {
                 glass: '24px',

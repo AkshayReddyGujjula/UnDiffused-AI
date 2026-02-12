@@ -1,6 +1,6 @@
 {
   "../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-C36o-Icd.js",
+    "file": "assets/crx-manifest.js-WMsjonIq.js",
     "name": "crx-manifest.js",
     "src": "../../../../../@crx/manifest",
     "isEntry": true
@@ -9,36 +9,36 @@
     "file": "assets/GlassCard-BMBPpFOK.js",
     "name": "GlassCard"
   },
-  "_index-B0Ry0XpQ.js": {
-    "file": "assets/index-B0Ry0XpQ.js",
+  "_index-Bil0S0ir.js": {
+    "file": "assets/index-Bil0S0ir.js",
     "name": "index",
     "imports": [
       "_GlassCard-BMBPpFOK.js"
     ],
     "css": [
-      "assets/index-xxWwMgMv.css"
+      "assets/index-CBKn9gME.css"
     ]
   },
-  "_index-xxWwMgMv.css": {
-    "file": "assets/index-xxWwMgMv.css",
-    "src": "_index-xxWwMgMv.css"
+  "_index-CBKn9gME.css": {
+    "file": "assets/index-CBKn9gME.css",
+    "src": "_index-CBKn9gME.css"
   },
-  "_index.tsx-loader-BqS22gda.js": {
-    "file": "assets/index.tsx-loader-BqS22gda.js",
-    "src": "_index.tsx-loader-BqS22gda.js"
+  "_index.tsx-loader-BlayQZjj.js": {
+    "file": "assets/index.tsx-loader-BlayQZjj.js",
+    "src": "_index.tsx-loader-BlayQZjj.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
     "name": "modulepreload-polyfill"
   },
   "src/background/main.ts": {
-    "file": "assets/main.ts-FV8GL2af.js",
+    "file": "assets/main.ts-DCU1UXOY.js",
     "name": "main.ts",
     "src": "src/background/main.ts",
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-BtKWfwhP.js",
+    "file": "assets/index.tsx-D6WKwmLH.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,
@@ -56,13 +56,13 @@
     ]
   },
   "src/popup/popup.html": {
-    "file": "assets/popup.html-XH-w2kpi.js",
+    "file": "assets/popup.html-DjO2C77m.js",
     "name": "popup.html",
     "src": "src/popup/popup.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_index-B0Ry0XpQ.js",
+      "_index-Bil0S0ir.js",
       "_GlassCard-BMBPpFOK.js"
     ]
   }

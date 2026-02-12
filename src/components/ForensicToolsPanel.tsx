@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { ToolCard } from './ToolCard';
 import { ELATool } from './tools/ELATool';
 import { NoiseTool } from './tools/NoiseTool';
@@ -48,6 +48,14 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
     const [safeImageUrl, setSafeImageUrl] = useState<string | null>(null);
 
     useEffect(() => {
+        return () => {
+            if (analyzedImage?.startsWith('blob:')) {
+                URL.revokeObjectURL(analyzedImage);
+            }
+        };
+    }, [analyzedImage]);
+
+    useEffect(() => {
         let cancelled = false;
         setSafeImageUrl(null);
 
@@ -67,9 +75,27 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
     }, [targetImage]);
 
     const handleAnalysisResult = useCallback((canvas: HTMLCanvasElement, toolTitle: string) => {
-        setAnalyzedImage(canvas.toDataURL());
-        setActiveToolTitle(toolTitle);
+        canvas.toBlob((blob) => {
+            if (!blob) return;
+            const objectUrl = URL.createObjectURL(blob);
+            setAnalyzedImage(prev => {
+                if (prev?.startsWith('blob:')) {
+                    URL.revokeObjectURL(prev);
+                }
+                return objectUrl;
+            });
+            setActiveToolTitle(toolTitle);
+        }, 'image/png');
     }, []);
+
+    const stableToolResultHandlers = useMemo(() => {
+        return Object.fromEntries(
+            TOOLS.map((tool) => [
+                tool.title,
+                (canvas: HTMLCanvasElement) => handleAnalysisResult(canvas, tool.title)
+            ])
+        ) as Record<string, (canvas: HTMLCanvasElement) => void>;
+    }, [handleAnalysisResult]);
 
     const handleDownload = () => {
         const imageToDownload = analyzedImage || safeImageUrl || targetImage;
@@ -196,7 +222,13 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
             {/* Controls */}
             {analyzedImage && (
                 <div className="comparison-actions">
-                    <button className="undo-btn" onClick={() => { setAnalyzedImage(null); setActiveToolTitle(null); }} title="Undo Analysis">
+                    <button className="undo-btn" onClick={() => {
+                        if (analyzedImage?.startsWith('blob:')) {
+                            URL.revokeObjectURL(analyzedImage);
+                        }
+                        setAnalyzedImage(null);
+                        setActiveToolTitle(null);
+                    }} title="Undo Analysis">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M3 12a9 9 0 1 0 9-9 9.75 3.88 0 0 0-7.74 2.74L3 12" />
                             <path d="M3 3v9h9" />
@@ -254,7 +286,7 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                         >
                             <tool.Component
                                 targetImage={safeImageUrl}
-                                onResult={(canvas) => handleAnalysisResult(canvas, tool.title)}
+                                onResult={stableToolResultHandlers[tool.title]}
                             />
                         </ToolCard>
                     ))}

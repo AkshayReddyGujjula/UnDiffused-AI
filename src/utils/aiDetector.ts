@@ -1,7 +1,12 @@
 import * as ort from 'onnxruntime-web';
 
 // Allow WASM to be loaded from extension assets
-ort.env.wasm.wasmPaths = chrome.runtime.getURL('wasm/');
+ort.env.wasm.wasmPaths = {
+    'ort-wasm.wasm': chrome.runtime.getURL('wasm/ort-wasm.wasm'),
+    'ort-wasm-simd.wasm': chrome.runtime.getURL('wasm/ort-wasm-simd.wasm'),
+    'ort-wasm-threaded.wasm': chrome.runtime.getURL('wasm/ort-wasm-threaded.wasm'),
+    'ort-wasm-simd-threaded.wasm': chrome.runtime.getURL('wasm/ort-wasm-simd-threaded.wasm'),
+};
 ort.env.wasm.numThreads = 1; // Force single-threaded to avoid SharedArrayBuffer requirements (COOP/COEP)
 
 const MODEL_PATH = 'models/model_quantized.onnx';

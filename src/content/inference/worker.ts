@@ -6,7 +6,7 @@ console.log('[Worker] Worker script loaded and starting...');
 // Configuration (received from main thread)
 let config: {
     modelPath: string;
-    wasmPaths: string;
+    wasmPaths: string | Record<string, string>;
 } | null = null;
 
 const MEAN = [0.485, 0.456, 0.406];
@@ -14,6 +14,7 @@ const STD = [0.229, 0.224, 0.225];
 const TARGET_SIZE = 224;
 
 let session: ort.InferenceSession | null = null;
+let inferenceQueue: Promise<void> = Promise.resolve();
 
 // --- Helper: Softmax ---
 function softmax(logits: number[]): number[] {
@@ -94,7 +95,7 @@ async function loadModel() {
 }
 
 // --- Message Handler ---
-self.onmessage = async (e: MessageEvent) => {
+async function processMessage(e: MessageEvent): Promise<void> {
     const { id, action, type, payload } = e.data;
 
     // Handle Initialization
@@ -131,20 +132,43 @@ self.onmessage = async (e: MessageEvent) => {
                 const tensors = batchCrops.map((crop: CropRect) => extractCropToTensor(bitmap, crop));
                 const batchInput = batchTensors(tensors);
 
-                // Run inference
-                const results = await session.run({ pixel_values: batchInput });
-                const logits = results.logits?.data as Float32Array;
+                // Run inference using runtime-discovered input/output names
+                const inputName = session.inputNames[0];
+                const outputName = session.outputNames[0];
+                const results = await session.run({ [inputName]: batchInput });
+                const outputTensor = results[outputName];
 
-                if (!logits) throw new Error("Invalid output");
+                if (!outputTensor) throw new Error(`Missing output tensor: ${outputName}`);
 
-                // Parse logits
+                const outputData = outputTensor.data as Float32Array;
+                const classCount = outputTensor.dims[1] ?? 1;
+
+                if (classCount !== 1 && classCount !== 2) {
+                    throw new Error(`Unsupported output class count: ${classCount}`);
+                }
+
+                // Parse model output as either binary logits/probability (1 output)
+                // or two-class logits (2 outputs).
                 for (let j = 0; j < batchCrops.length; j++) {
-                    const cropLogits = Array.from(logits.slice(j * 2, (j + 1) * 2));
-                    const probs = softmax(cropLogits);
+                    let aiProb = 0;
+                    let realProb = 0;
+
+                    if (classCount === 2) {
+                        const cropLogits = Array.from(outputData.slice(j * 2, (j + 1) * 2));
+                        const probs = softmax(cropLogits);
+                        aiProb = probs[0];
+                        realProb = probs[1];
+                    } else {
+                        const raw = outputData[j];
+                        // If already in [0,1], treat as probability; otherwise treat as logit.
+                        aiProb = raw >= 0 && raw <= 1 ? raw : 1 / (1 + Math.exp(-raw));
+                        realProb = 1 - aiProb;
+                    }
+
                     cropResults.push({
                         rect: batchCrops[j],
-                        aiProb: probs[0],
-                        realProb: probs[1]
+                        aiProb,
+                        realProb
                     });
                 }
 
@@ -190,4 +214,12 @@ self.onmessage = async (e: MessageEvent) => {
             if (bitmap) bitmap.close();
         }
     }
+}
+
+self.onmessage = (e: MessageEvent) => {
+    inferenceQueue = inferenceQueue
+        .then(() => processMessage(e))
+        .catch((err) => {
+            console.error('[Worker] Queue failure:', err);
+        });
 };

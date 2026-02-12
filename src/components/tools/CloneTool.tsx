@@ -7,11 +7,17 @@ interface CloneToolProps {
     onResult?: (canvas: HTMLCanvasElement) => void;
 }
 
+type BlockDescriptor = {
+    x: number;
+    y: number;
+    desc: Float32Array;
+    hash: number;
+};
+
 /**
  * Clone Detection Tool
- * =====================
- * Finds duplicated regions in an image using block matching.
- * Highlights clone pairs with matching colours and connecting lines.
+ * ====================
+ * Detects duplicated regions via block descriptors and similarity matching.
  */
 export const CloneTool: React.FC<CloneToolProps> = ({ targetImage, onResult }) => {
     const [sensitivity, setSensitivity] = useState(5);
@@ -19,34 +25,65 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage, onResult }) =
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [cloneCount, setCloneCount] = useState<number | null>(null);
 
-    const hashBlock = (data: Uint8ClampedArray, w: number, bx: number, by: number, size: number): number => {
-        let hash = 0;
-        const step = Math.max(1, Math.floor(size / 8));
-        for (let dy = 0; dy < size; dy += step) {
-            for (let dx = 0; dx < size; dx += step) {
-                const idx = ((by + dy) * w + (bx + dx)) * 4;
-                const lum = data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114;
-                hash = ((hash << 5) - hash + Math.floor(lum / (12 - sensitivity))) | 0;
+    const buildDescriptor = (
+        luminance: Float32Array,
+        width: number,
+        x: number,
+        y: number,
+        blockSize: number
+    ): Float32Array => {
+        // 4x4 mean-pooled patch descriptor normalized by local mean.
+        const grid = 4;
+        const cell = Math.max(1, Math.floor(blockSize / grid));
+        const values = new Float32Array(grid * grid);
+
+        let sumAll = 0;
+        for (let gy = 0; gy < grid; gy++) {
+            for (let gx = 0; gx < grid; gx++) {
+                let sum = 0;
+                let count = 0;
+                for (let dy = 0; dy < cell; dy++) {
+                    for (let dx = 0; dx < cell; dx++) {
+                        const px = x + gx * cell + dx;
+                        const py = y + gy * cell + dy;
+                        sum += luminance[py * width + px];
+                        count++;
+                    }
+                }
+                const mean = count > 0 ? sum / count : 0;
+                values[gy * grid + gx] = mean;
+                sumAll += mean;
             }
         }
-        return hash;
+
+        const avg = sumAll / values.length;
+        let norm = 0;
+        for (let i = 0; i < values.length; i++) {
+            values[i] -= avg;
+            norm += values[i] * values[i];
+        }
+        norm = Math.sqrt(norm) || 1;
+        for (let i = 0; i < values.length; i++) {
+            values[i] /= norm;
+        }
+        return values;
     };
 
-    const blockSimilarity = (data: Uint8ClampedArray, w: number, ax: number, ay: number, bx: number, by: number, size: number): number => {
-        let totalDiff = 0;
-        let pixels = 0;
-        const step = Math.max(1, Math.floor(size / 16));
-        for (let dy = 0; dy < size; dy += step) {
-            for (let dx = 0; dx < size; dx += step) {
-                const idxA = ((ay + dy) * w + (ax + dx)) * 4;
-                const idxB = ((by + dy) * w + (bx + dx)) * 4;
-                totalDiff += Math.abs(data[idxA] - data[idxB]);
-                totalDiff += Math.abs(data[idxA + 1] - data[idxB + 1]);
-                totalDiff += Math.abs(data[idxA + 2] - data[idxB + 2]);
-                pixels++;
-            }
+    const hashDescriptor = (desc: Float32Array): number => {
+        let h = 2166136261;
+        for (let i = 0; i < desc.length; i++) {
+            // Quantize normalized value from [-1, 1] into 32 bins.
+            const q = Math.max(0, Math.min(31, Math.round((desc[i] + 1) * 15.5)));
+            h ^= q;
+            h = Math.imul(h, 16777619);
         }
-        return 1 - totalDiff / (pixels * 3 * 255);
+        return h >>> 0;
+    };
+
+    const cosineSimilarity = (a: Float32Array, b: Float32Array): number => {
+        let dot = 0;
+        for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
+        return dot;
     };
 
     const analyse = useCallback(async () => {
@@ -62,96 +99,140 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage, onResult }) =
                 img.src = targetImage;
             });
 
-            const w = img.naturalWidth;
-            const h = img.naturalHeight;
+            const srcW = img.naturalWidth;
+            const srcH = img.naturalHeight;
+            const scale = Math.min(1, 768 / Math.max(srcW, srcH));
+            const w = Math.max(64, Math.round(srcW * scale));
+            const h = Math.max(64, Math.round(srcH * scale));
 
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = w;
             tempCanvas.height = h;
             const tempCtx = tempCanvas.getContext('2d')!;
-            tempCtx.drawImage(img, 0, 0);
-            const imageData = tempCtx.getImageData(0, 0, w, h);
+            tempCtx.drawImage(img, 0, 0, w, h);
+            const imageData = tempCtx.getImageData(0, 0, w, h).data;
 
-            // Hash all blocks
-            const step = Math.max(minRegion / 2, 8);
-            const blockMap = new Map<number, { x: number; y: number }[]>();
-
-            for (let by = 0; by + minRegion <= h; by += step) {
-                for (let bx = 0; bx + minRegion <= w; bx += step) {
-                    const hash = hashBlock(imageData.data, w, bx, by, minRegion);
-                    if (!blockMap.has(hash)) blockMap.set(hash, []);
-                    blockMap.get(hash)!.push({ x: bx, y: by });
-                }
+            const luminance = new Float32Array(w * h);
+            for (let i = 0; i < w * h; i++) {
+                const idx = i * 4;
+                luminance[i] = 0.299 * imageData[idx] + 0.587 * imageData[idx + 1] + 0.114 * imageData[idx + 2];
             }
 
-            // Find clone pairs (blocks with same hash that are far apart)
-            const clonePairs: { ax: number; ay: number; bx: number; by: number; sim: number }[] = [];
-            const minDist = minRegion * 2;
-            const threshold = 0.85 + (sensitivity - 5) * 0.01;
+            const blockSize = Math.max(8, Math.round(minRegion * scale));
+            let stride = Math.max(4, Math.floor(blockSize / 2));
+            let estBlocks = Math.floor((w - blockSize) / stride + 1) * Math.floor((h - blockSize) / stride + 1);
+            while (estBlocks > 12000) {
+                stride += 2;
+                estBlocks = Math.floor((w - blockSize) / stride + 1) * Math.floor((h - blockSize) / stride + 1);
+            }
 
-            for (const [, blocks] of blockMap) {
-                if (blocks.length < 2 || blocks.length > 50) continue;
-                for (let i = 0; i < blocks.length && i < 10; i++) {
-                    for (let j = i + 1; j < blocks.length && j < 10; j++) {
-                        const dist = Math.sqrt((blocks[i].x - blocks[j].x) ** 2 + (blocks[i].y - blocks[j].y) ** 2);
-                        if (dist < minDist) continue;
+            const descriptors: BlockDescriptor[] = [];
+            const buckets = new Map<number, number[]>();
+            let scanned = 0;
 
-                        const sim = blockSimilarity(imageData.data, w, blocks[i].x, blocks[i].y, blocks[j].x, blocks[j].y, minRegion);
-                        if (sim >= threshold) {
-                            clonePairs.push({
-                                ax: blocks[i].x, ay: blocks[i].y,
-                                bx: blocks[j].x, by: blocks[j].y,
-                                sim
-                            });
-                        }
+            for (let by = 0; by + blockSize <= h; by += stride) {
+                for (let bx = 0; bx + blockSize <= w; bx += stride) {
+                    const desc = buildDescriptor(luminance, w, bx, by, blockSize);
+                    const hash = hashDescriptor(desc);
+                    const item: BlockDescriptor = { x: bx, y: by, desc, hash };
+                    const index = descriptors.push(item) - 1;
+                    if (!buckets.has(hash)) buckets.set(hash, []);
+                    buckets.get(hash)!.push(index);
+
+                    scanned++;
+                    if (scanned % 2000 === 0) {
+                        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
                     }
                 }
             }
 
-            // Render to off-screen canvas
+            const threshold = 0.9 + (sensitivity - 5) * 0.008;
+            const minDist = blockSize * 1.5;
+            const candidates: { a: BlockDescriptor; b: BlockDescriptor; sim: number }[] = [];
+
+            for (const ids of buckets.values()) {
+                if (ids.length < 2 || ids.length > 70) continue;
+
+                const maxComparisons = Math.min(400, (ids.length * (ids.length - 1)) / 2);
+                let comparisons = 0;
+
+                for (let i = 0; i < ids.length; i++) {
+                    for (let j = i + 1; j < ids.length; j++) {
+                        const a = descriptors[ids[i]];
+                        const b = descriptors[ids[j]];
+                        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+                        if (dist < minDist) continue;
+
+                        const sim = cosineSimilarity(a.desc, b.desc);
+                        if (sim >= threshold) {
+                            candidates.push({ a, b, sim });
+                        }
+
+                        comparisons++;
+                        if (comparisons >= maxComparisons) break;
+                    }
+                    if (comparisons >= maxComparisons) break;
+                }
+            }
+
+            candidates.sort((u, v) => v.sim - u.sim);
+
+            const selected: { a: BlockDescriptor; b: BlockDescriptor; sim: number }[] = [];
+            const maxPairs = 30;
+            for (const pair of candidates) {
+                const tooClose = selected.some((s) =>
+                    Math.hypot(s.a.x - pair.a.x, s.a.y - pair.a.y) < blockSize / 2 &&
+                    Math.hypot(s.b.x - pair.b.x, s.b.y - pair.b.y) < blockSize / 2
+                );
+                if (!tooClose) {
+                    selected.push(pair);
+                    if (selected.length >= maxPairs) break;
+                }
+            }
+
             const resultCanvas = document.createElement('canvas');
-            resultCanvas.width = w;
-            resultCanvas.height = h;
+            resultCanvas.width = srcW;
+            resultCanvas.height = srcH;
             const ctx = resultCanvas.getContext('2d')!;
             ctx.drawImage(img, 0, 0);
 
-            // Draw clone pairs
-            const colors = ['#f43f5e', '#8b5cf6', '#06b6d4', '#f59e0b', '#10b981', '#ec4899', '#3b82f6'];
-            const limitedPairs = clonePairs.slice(0, 30);
+            const colors = ['#f43f5e', '#06b6d4', '#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6'];
+            for (let i = 0; i < selected.length; i++) {
+                const color = colors[i % colors.length];
+                const pair = selected[i];
 
-            limitedPairs.forEach((pair, idx) => {
-                const color = colors[idx % colors.length];
+                const ax = pair.a.x / scale;
+                const ay = pair.a.y / scale;
+                const bx = pair.b.x / scale;
+                const by = pair.b.y / scale;
+                const regionSize = minRegion;
+
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
-                ctx.globalAlpha = 0.7;
+                ctx.globalAlpha = 0.75;
+                ctx.strokeRect(ax, ay, regionSize, regionSize);
+                ctx.strokeRect(bx, by, regionSize, regionSize);
 
-                // Draw rectangles
-                ctx.strokeRect(pair.ax, pair.ay, minRegion, minRegion);
-                ctx.strokeRect(pair.bx, pair.by, minRegion, minRegion);
-
-                // Fill with translucent color
                 ctx.fillStyle = color;
-                ctx.globalAlpha = 0.15;
-                ctx.fillRect(pair.ax, pair.ay, minRegion, minRegion);
-                ctx.fillRect(pair.bx, pair.by, minRegion, minRegion);
+                ctx.globalAlpha = 0.16;
+                ctx.fillRect(ax, ay, regionSize, regionSize);
+                ctx.fillRect(bx, by, regionSize, regionSize);
 
-                // Connecting line
-                ctx.globalAlpha = 0.4;
+                ctx.globalAlpha = 0.45;
                 ctx.setLineDash([4, 4]);
                 ctx.beginPath();
-                ctx.moveTo(pair.ax + minRegion / 2, pair.ay + minRegion / 2);
-                ctx.lineTo(pair.bx + minRegion / 2, pair.by + minRegion / 2);
+                ctx.moveTo(ax + regionSize / 2, ay + regionSize / 2);
+                ctx.lineTo(bx + regionSize / 2, by + regionSize / 2);
                 ctx.stroke();
                 ctx.setLineDash([]);
                 ctx.globalAlpha = 1;
-            });
+            }
 
-            // Pass result up
             if (onResult) {
                 onResult(resultCanvas);
             }
 
-            setCloneCount(limitedPairs.length);
+            setCloneCount(selected.length);
         } catch (err) {
             console.error('[Clone] Detection failed:', err);
         } finally {
@@ -185,7 +266,7 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage, onResult }) =
                         Result shown in main view
                     </div>
                     <div className={`tool-verdict ${cloneCount > 5 ? 'tool-verdict-danger' : cloneCount > 0 ? 'tool-verdict-suspicious' : 'tool-verdict-safe'}`}>
-                        {cloneCount > 0 ? '🎯' : '✅'} Found {cloneCount} clone {cloneCount === 1 ? 'pair' : 'pairs'}
+                        Found {cloneCount} clone {cloneCount === 1 ? 'pair' : 'pairs'}
                     </div>
                 </div>
             )}
