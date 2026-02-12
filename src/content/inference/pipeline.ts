@@ -1,4 +1,4 @@
-import { generateDefaultCrops, generateDeepScanTiles } from './crops';
+import { generateGridCrops, generateDeepScanTiles } from './crops';
 import { InferenceResult, CropRect } from './types';
 import Worker from './worker?worker&inline';
 
@@ -94,7 +94,7 @@ export async function runMultiCropInference(
     // 1. Generate Crops (Main Thread - fast)
     const crops: CropRect[] = mode === 'deep'
         ? generateDeepScanTiles(width, height)
-        : generateDefaultCrops(width, height);
+        : generateGridCrops(width, height);
 
     if (crops.length === 0) throw new Error("No valid crops generated");
 

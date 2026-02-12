@@ -55,10 +55,10 @@ export const ResultView: React.FC<ResultViewProps> = ({
         if (confidence < 66) {
             return {
                 label: "Inconclusive",
-                containerClass: "bg-yellow-500/20 border border-yellow-500/30",
-                dotClass: "bg-yellow-400",
-                textClass: "text-yellow-400",
-                barClass: "bg-yellow-500"
+                containerClass: "bg-white/10 border border-white/20",
+                dotClass: "bg-white",
+                textClass: "text-white",
+                barClass: "bg-white"
             };
         }
 

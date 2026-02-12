@@ -141,6 +141,7 @@ const TAILWIND_STYLES = `
 .opacity-100 { opacity: 1; }
 
 /* ===== BACKGROUNDS ===== */
+.bg-white { background-color: #ffffff; }
 .bg-black\\/20 { background-color: rgba(0, 0, 0, 0.2); }
 .bg-black\\/30 { background-color: rgba(0, 0, 0, 0.3); }
 .bg-black\\/50 { background-color: rgba(0, 0, 0, 0.5); }

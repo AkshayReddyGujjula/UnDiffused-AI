@@ -9,23 +9,23 @@
     "file": "assets/GlassCard-BMBPpFOK.js",
     "name": "GlassCard"
   },
-  "_index-CA8fbmwT.js": {
-    "file": "assets/index-CA8fbmwT.js",
+  "_index-Bil0S0ir.js": {
+    "file": "assets/index-Bil0S0ir.js",
     "name": "index",
     "imports": [
       "_GlassCard-BMBPpFOK.js"
     ],
     "css": [
-      "assets/index-CWa9UKFi.css"
+      "assets/index-CBKn9gME.css"
     ]
   },
-  "_index-CWa9UKFi.css": {
-    "file": "assets/index-CWa9UKFi.css",
-    "src": "_index-CWa9UKFi.css"
+  "_index-CBKn9gME.css": {
+    "file": "assets/index-CBKn9gME.css",
+    "src": "_index-CBKn9gME.css"
   },
-  "_index.tsx-loader-C0OTnPk6.js": {
-    "file": "assets/index.tsx-loader-C0OTnPk6.js",
-    "src": "_index.tsx-loader-C0OTnPk6.js"
+  "_index.tsx-loader-DyjO6ZeN.js": {
+    "file": "assets/index.tsx-loader-DyjO6ZeN.js",
+    "src": "_index.tsx-loader-DyjO6ZeN.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -38,7 +38,7 @@
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-B4F38D5V.js",
+    "file": "assets/index.tsx-CRm2Hmnq.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,
@@ -56,13 +56,13 @@
     ]
   },
   "src/popup/popup.html": {
-    "file": "assets/popup.html-Dd8K5i-G.js",
+    "file": "assets/popup.html-DjO2C77m.js",
     "name": "popup.html",
     "src": "src/popup/popup.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_index-CA8fbmwT.js",
+      "_index-Bil0S0ir.js",
       "_GlassCard-BMBPpFOK.js"
     ]
   }

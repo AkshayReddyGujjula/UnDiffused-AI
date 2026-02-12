@@ -73,6 +73,48 @@ export function generateDefaultCrops(width: number, height: number): CropRect[] 
 }
 
 /**
+ * Generates a 3x3 Grid of crops (9 total) for standard inference.
+ * Positions: TL, TC, TR, ML, Center, MR, BL, BC, BR
+ */
+export function generateGridCrops(width: number, height: number): CropRect[] {
+    const crops: CropRect[] = [];
+    const size = PATCH_SIZE; // 224
+
+    // If image is smaller than patch, return single global crop
+    if (width <= size && height <= size) {
+        return [{ x: 0, y: 0, width, height, label: 'Global' }];
+    }
+
+    // Grid Coordinates
+    // X Axis: Left(0), Center((W-224)/2), Right(W-224)
+    const xLeft = 0;
+    const xCenter = Math.max(0, Math.floor((width - size) / 2));
+    const xRight = Math.max(0, width - size);
+
+    // Y Axis: Top(0), Center((H-224)/2), Bottom(H-224)
+    const yTop = 0;
+    const yCenter = Math.max(0, Math.floor((height - size) / 2));
+    const yBottom = Math.max(0, height - size);
+
+    // Top Row
+    crops.push({ x: xLeft, y: yTop, width: size, height: size, label: 'Top-Left' });
+    crops.push({ x: xCenter, y: yTop, width: size, height: size, label: 'Top-Center' });
+    crops.push({ x: xRight, y: yTop, width: size, height: size, label: 'Top-Right' });
+
+    // Middle Row
+    crops.push({ x: xLeft, y: yCenter, width: size, height: size, label: 'Mid-Left' });
+    crops.push({ x: xCenter, y: yCenter, width: size, height: size, label: 'Center' });
+    crops.push({ x: xRight, y: yCenter, width: size, height: size, label: 'Mid-Right' });
+
+    // Bottom Row
+    crops.push({ x: xLeft, y: yBottom, width: size, height: size, label: 'Bottom-Left' });
+    crops.push({ x: xCenter, y: yBottom, width: size, height: size, label: 'Bottom-Center' });
+    crops.push({ x: xRight, y: yBottom, width: size, height: size, label: 'Bottom-Right' });
+
+    return crops;
+}
+
+/**
  * Generates a grid of non-overlapping tiles for Deep Scan.
  */
 export function generateDeepScanTiles(width: number, height: number): CropRect[] {

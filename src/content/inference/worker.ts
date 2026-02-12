@@ -194,16 +194,18 @@ async function processMessage(e: MessageEvent): Promise<void> {
             }
 
             // Aggregate Results
-            // FIX: Use 2nd highest probability to filter out single-crop outliers (false positives)
-            // If we have enough crops (>=4), discard the single highest score.
+            // FIX: Use Avg-TopK (K=3) to robustly detect AI content while filtering single-crop outliers.
+            // 1. Sort crops by AI probability (descending)
             const sortedCrops = [...cropResults].sort((a, b) => b.aiProb - a.aiProb);
 
             let finalAiProb = 0;
-            if (sortedCrops.length >= 4) {
-                // Take 2nd highest (robust against 1 outlier)
-                finalAiProb = sortedCrops[1].aiProb;
+            if (sortedCrops.length >= 3) {
+                // Take average of top 3
+                const top3 = sortedCrops.slice(0, 3);
+                const sum = top3.reduce((acc, c) => acc + c.aiProb, 0);
+                finalAiProb = sum / 3;
             } else if (sortedCrops.length > 0) {
-                // Fallback to max for small inputs
+                // Fallback to max for small inputs (<3 crops)
                 finalAiProb = sortedCrops[0].aiProb;
             }
 
