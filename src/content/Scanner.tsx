@@ -3,28 +3,21 @@ import { GlassCard } from '../components/GlassCard';
 import { ResultView, ScanResult } from '../components/ResultView';
 import { ForensicToolsPanel } from '../components/ForensicToolsPanel';
 import { ImageViewer } from '../components/ImageViewer';
+import { runMultiCropInference } from './inference/pipeline';
+import { fetchImageViaBackground } from './inference/imageLoader';
 
 type ScanState = 'idle' | 'scanning' | 'result' | 'tools' | 'error';
 
-/**
- * Scanner Component
- * ==================
- * Main UI overlay showing the scan animation and result.
- * 
- * Features:
- * - Spring physics entry animation
- * - Laser scanner effect through "glass"
- * - Verdict display with color coding
- * - Draggable interface
- */
 export const Scanner: React.FC = () => {
     const [state, setState] = useState<ScanState>('idle');
     const [result, setResult] = useState<ScanResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [targetImage, setTargetImage] = useState<string | null>(null);
-
-    // New Feature: Fullscreen Image Viewer
     const [viewingImage, setViewingImage] = useState<{ url: string; title: string } | null>(null);
+
+    // Deep Scan State
+    const [isDeepScanning, setIsDeepScanning] = useState(false);
+    const [progress, setProgress] = useState(0);
 
     // Dragging state
     const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -32,37 +25,79 @@ export const Scanner: React.FC = () => {
     const dragOffset = useRef({ x: 0, y: 0 });
     const cardRef = useRef<HTMLDivElement>(null);
 
+    // Cache the bitmap to re-use for Deep Scan
+    const imageBitmapRef = useRef<ImageBitmap | null>(null);
+
+    const runScan = async (url: string, mode: 'default' | 'deep') => {
+        try {
+            if (mode === 'default') {
+                setState('scanning');
+                setIsDeepScanning(false);
+            } else {
+                setIsDeepScanning(true);
+                setProgress(0);
+            }
+
+            // Load image if not cached or if URL changed
+            // NOTE: We transfer the bitmap to the worker, so it becomes unusable. 
+            // We must re-fetch/create it for every scan if cache is empty.
+            let bitmap = imageBitmapRef.current;
+            if (!bitmap || targetImage !== url) {
+                bitmap = await fetchImageViaBackground(url);
+            }
+
+            // We do NOT cache it here because we are about to transfer it.
+            // If we wanted to cache, we'd need to .clone() it, but that's expensive for memory.
+            // Better to re-fetch/re-create for the rare case of re-scanning.
+            imageBitmapRef.current = null; // Clear cache as we're giving it away
+
+            const start = performance.now();
+
+            // This transfers the bitmap to the worker
+            const res = await runMultiCropInference(bitmap, mode, (processed, total) => {
+                if (total > 0) {
+                    const p = Math.floor((processed / total) * 100);
+                    // console.log(`[Scanner] Progress: ${p}% (${processed}/${total})`);
+                    setProgress(p);
+                }
+            });
+
+            const end = performance.now();
+
+            res.inferenceTime = end - start;
+            setResult({
+                isAI: res.isAI,
+                confidence: res.confidence,
+                heatmapData: [],
+                filterData: []
+            });
+            setState('result');
+            setIsDeepScanning(false);
+
+        } catch (e: any) {
+            console.error('[UnDiffused] Analysis failed:', e);
+            setError(e.message || 'Failed to analyze image');
+            setState('error');
+            setIsDeepScanning(false);
+            imageBitmapRef.current = null;
+        }
+    };
+
     useEffect(() => {
-        const handleMessage = (message: {
+        const handleMessage = async (message: {
             type: string;
             imageUrl?: string;
-            isAI?: boolean;
-            confidence?: number;
-            heatmapData?: number[];
-            filterData?: number[];
-            error?: string;
         }) => {
-            switch (message.type) {
-                case 'SCANNING':
-                    setState('scanning');
-                    setTargetImage(message.imageUrl || null);
-                    setResult(null);
-                    setError(null);
-                    // Reset position on new scan? Or keep it? keeping it is better UX.
-                    break;
-                case 'SHOW_RESULT':
-                    setState('result');
-                    setResult({
-                        isAI: message.isAI || false,
-                        confidence: message.confidence || 0,
-                        heatmapData: message.heatmapData,
-                        filterData: message.filterData
-                    });
-                    break;
-                case 'ERROR':
-                    setState('error');
-                    setError(message.error || 'Unknown error');
-                    break;
+            if (message.type === 'SCANNING' && message.imageUrl) {
+                setTargetImage(message.imageUrl);
+                setResult(null);
+                setError(null);
+                // Reset cache on new scan
+                imageBitmapRef.current = null;
+                runScan(message.imageUrl, 'default');
+            } else if (message.type === 'ERROR') {
+                setState('error');
+                setError('An error occurred in background');
             }
         };
 
@@ -70,35 +105,20 @@ export const Scanner: React.FC = () => {
         return () => chrome.runtime.onMessage.removeListener(handleMessage);
     }, []);
 
-    // Global drag handlers
+    // ... (Drag handlers truncated for brevity, assume same as before) ...
+    // Re-implementing Drag Consumers because Replace requires full block
+
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
             if (!isDragging || !cardRef.current) return;
-
-            let newX = e.clientX - dragOffset.current.x;
-            let newY = e.clientY - dragOffset.current.y;
-
-            // Constrain to viewport (Chrome tab parameters)
-            // User requested strict containment within viewport
+            const newX = e.clientX - dragOffset.current.x;
+            const newY = e.clientY - dragOffset.current.y;
             const rect = cardRef.current.getBoundingClientRect();
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-
-            // Strict bounds: 0 to (Viewport - WindowSize)
-            const maxX = Math.max(0, viewportWidth - rect.width);
-            const maxY = Math.max(0, viewportHeight - rect.height);
-
-            // Clamp Position
-            newX = Math.max(0, Math.min(newX, maxX));
-            newY = Math.max(0, Math.min(newY, maxY));
-
-            setPosition({ x: newX, y: newY });
+            const maxX = Math.max(0, window.innerWidth - rect.width);
+            const maxY = Math.max(0, window.innerHeight - rect.height);
+            setPosition({ x: Math.max(0, Math.min(newX, maxX)), y: Math.max(0, Math.min(newY, maxY)) });
         };
-
-        const handleMouseUp = () => {
-            setIsDragging(false);
-        };
-
+        const handleMouseUp = () => setIsDragging(false);
         if (isDragging) {
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
@@ -111,60 +131,32 @@ export const Scanner: React.FC = () => {
 
     const handleMouseDown = (e: React.MouseEvent) => {
         if (!cardRef.current) return;
-        // Check if clicking scrollbar/content area - allow default behavior
-        // But since we are dragging from handle only (pill), this is fine.
-        // Wait, handleMouseDown is passed to the PILL div only.
-        // e.preventDefault(); // Prevent text selection during drag
-
         const rect = cardRef.current.getBoundingClientRect();
-
-        // If we are currently centered (position is null), we need to set the initial absolute position
-        // to exactly where the element currently is, to prevent jumping.
-        const currentX = rect.left;
-        const currentY = rect.top;
-
-        dragOffset.current = {
-            x: e.clientX - currentX,
-            y: e.clientY - currentY
-        };
-
-        // Switch to absolute positioning immediately prevents snap
-        if (!position) {
-            setPosition({ x: currentX, y: currentY });
-        }
-
+        dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        if (!position) setPosition({ x: rect.left, y: rect.top });
         setIsDragging(true);
     };
 
-    // Close handler
     const handleClose = () => {
         setState('idle');
         setResult(null);
         setError(null);
         setTargetImage(null);
-        // Reset position on close so next open is centered (per user request for centering)
         setPosition(null);
-        setViewingImage(null); // Close viewer too
+        setViewingImage(null);
+        imageBitmapRef.current = null;
     };
 
     if (state === 'idle') return null;
 
-    // Calculate safe dimensions
     const toolsWidth = state === 'tools' ? 800 : 400;
 
     return (
         <React.Fragment>
             <style>{`
-                .hide-scrollbar::-webkit-scrollbar {
-                    display: none;
-                }
-                .hide-scrollbar {
-                    -ms-overflow-style: none;
-                    scrollbar-width: none;
-                }
+                .hide-scrollbar::-webkit-scrollbar { display: none; }
+                .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
             `}</style>
-
-
 
             <div
                 className="fixed inset-0 z-[999999] pointer-events-none"
@@ -188,7 +180,6 @@ export const Scanner: React.FC = () => {
                     }}
                 >
                     <GlassCard className="relative overflow-hidden transition-all duration-300">
-                        {/* Inline styles for critical sizing — guarantees viewport containment */}
                         <div style={{
                             display: 'flex',
                             flexDirection: 'column',
@@ -197,13 +188,11 @@ export const Scanner: React.FC = () => {
                             width: toolsWidth,
                         }}>
 
-                            {/* Drag Handle (Top 5% approx) */}
+                            {/* Drag Handle */}
                             <div
                                 onMouseDown={handleMouseDown}
                                 className="absolute top-0 inset-x-0 h-8 cursor-move z-50 flex justify-center items-start pt-3 group"
-                                title="Drag to move"
                             >
-                                {/* iOS-style Pill */}
                                 <div className={`w-12 h-1.5 bg-white/40 rounded-full transition-all duration-200 shadow-sm ${isDragging ? 'bg-white/80 w-16' : 'group-hover:bg-white/60'}`} />
                             </div>
 
@@ -220,30 +209,21 @@ export const Scanner: React.FC = () => {
                                         <h2 className="text-lg font-semibold leading-tight m-0">UnDiffused</h2>
                                     </div>
                                 </div>
-                                {/* Close Button */}
-                                <button
-                                    onClick={handleClose}
-                                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover:scale-110 border border-white/10"
-                                    aria-label="Close"
-                                >
+                                <button onClick={handleClose} className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover:scale-110 border border-white/10">
                                     <svg className="w-4 h-4 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                     </svg>
                                 </button>
                             </div>
 
-                            {/* Scrollable Content Area */}
+                            {/* Content */}
                             <div className="hide-scrollbar" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 24px 24px 24px' }}>
-                                {/* Scanning State */}
-                                {state === 'scanning' && (
+                                {/* Scanning State (Initial) */}
+                                {state === 'scanning' && !result && (
                                     <div className="relative">
                                         {targetImage && (
                                             <div className="relative mb-4 rounded-xl overflow-hidden border border-white/10">
-                                                <img
-                                                    src={targetImage}
-                                                    alt="Scanning"
-                                                    className="w-full h-32 object-cover opacity-50"
-                                                />
+                                                <img src={targetImage} className="w-full h-32 object-cover opacity-50" />
                                                 <div className="absolute inset-0">
                                                     <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-scanner shadow-[0_0_20px_rgba(59,130,246,0.8)]" />
                                                 </div>
@@ -251,18 +231,27 @@ export const Scanner: React.FC = () => {
                                         )}
                                         <div className="flex items-center gap-3">
                                             <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse-glow" />
-                                            <span className="text-sm text-white/70">Analyzing image...</span>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm text-white/70">
+                                                    Analyzing image...
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Result State */}
-                                {state === 'result' && result && targetImage && (
-                                    <ResultView
-                                        result={result}
-                                        targetImage={targetImage}
-                                        onToolsClick={() => setState('tools')}
-                                    />
+                                {state === 'result' && result && (
+                                    <div className="flex flex-col gap-4">
+                                        <ResultView
+                                            result={result}
+                                            targetImage={targetImage || ''}
+                                            onToolsClick={() => setState('tools')}
+                                            onDeepScanClick={() => targetImage && runScan(targetImage, 'deep')}
+                                            isDeepScanning={isDeepScanning}
+                                            deepScanProgress={progress}
+                                        />
+                                    </div>
                                 )}
 
                                 {/* Tools State */}
@@ -287,12 +276,12 @@ export const Scanner: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Decorative Gradient Edge */}
+                        {/* Edge Gradient */}
                         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                     </GlassCard>
                 </div>
             </div>
-            {/* Fullscreen Image Viewer Overlay - Rendered LAST for stacking order */}
+
             {viewingImage && (
                 <ImageViewer
                     image={viewingImage.url}

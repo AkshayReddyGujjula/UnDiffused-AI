@@ -1,0 +1,193 @@
+import * as ort from 'onnxruntime-web';
+import { CropRect, InferenceResult, CropResult } from './types';
+
+console.log('[Worker] Worker script loaded and starting...');
+
+// Configuration (received from main thread)
+let config: {
+    modelPath: string;
+    wasmPaths: string;
+} | null = null;
+
+const MEAN = [0.485, 0.456, 0.406];
+const STD = [0.229, 0.224, 0.225];
+const TARGET_SIZE = 224;
+
+let session: ort.InferenceSession | null = null;
+
+// --- Helper: Softmax ---
+function softmax(logits: number[]): number[] {
+    const max = Math.max(...logits);
+    const exps = logits.map(x => Math.exp(x - max));
+    const sum = exps.reduce((a, b) => a + b, 0);
+    return exps.map(x => x / sum);
+}
+
+// --- Helper: Batch Tensors ---
+function batchTensors(tensors: ort.Tensor[]): ort.Tensor {
+    if (tensors.length === 0) throw new Error("No tensors to batch");
+    const batchSize = tensors.length;
+    const channels = 3;
+    const height = 224;
+    const width = 224;
+    const singleTensorSize = channels * height * width;
+    const batchedData = new Float32Array(batchSize * singleTensorSize);
+    tensors.forEach((tensor, i) => {
+        batchedData.set(tensor.data as Float32Array, i * singleTensorSize);
+    });
+    return new ort.Tensor('float32', batchedData, [batchSize, channels, height, width]);
+}
+
+// --- Helper: Extract Crop to Tensor (Worker Version) ---
+function extractCropToTensor(
+    sourceBitmap: ImageBitmap, // Using ImageBitmap in worker
+    crop: CropRect
+): ort.Tensor {
+    const canvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error("Failed to get context");
+
+    ctx.drawImage(
+        sourceBitmap,
+        crop.x, crop.y, crop.width, crop.height,
+        0, 0, TARGET_SIZE, TARGET_SIZE
+    );
+
+    const imgData = ctx.getImageData(0, 0, TARGET_SIZE, TARGET_SIZE);
+    const { data } = imgData;
+    const float32Data = new Float32Array(3 * TARGET_SIZE * TARGET_SIZE);
+
+    for (let i = 0; i < TARGET_SIZE * TARGET_SIZE; i++) {
+        const r = data[i * 4];
+        const g = data[i * 4 + 1];
+        const b = data[i * 4 + 2];
+        float32Data[i] = (r / 255.0 - MEAN[0]) / STD[0];
+        float32Data[i + TARGET_SIZE * TARGET_SIZE] = (g / 255.0 - MEAN[1]) / STD[1];
+        float32Data[i + 2 * TARGET_SIZE * TARGET_SIZE] = (b / 255.0 - MEAN[2]) / STD[2];
+    }
+
+    return new ort.Tensor('float32', float32Data, [1, 3, TARGET_SIZE, TARGET_SIZE]);
+}
+
+// --- Model Loader ---
+async function loadModel() {
+    if (session) return session;
+    if (!config) throw new Error("Worker not initialized with config");
+
+    try {
+        // Initialize ORT env with paths
+        ort.env.wasm.wasmPaths = config.wasmPaths;
+        ort.env.wasm.numThreads = 1;
+        ort.env.wasm.simd = true;
+
+        session = await ort.InferenceSession.create(config.modelPath, {
+            executionProviders: ['wasm'],
+            graphOptimizationLevel: 'all',
+            enableCpuMemArena: true,
+        });
+        console.log('[Worker] Model loaded');
+        return session;
+    } catch (e) {
+        console.error('[Worker] Model load failed', e);
+        throw e;
+    }
+}
+
+// --- Message Handler ---
+self.onmessage = async (e: MessageEvent) => {
+    const { id, action, type, payload } = e.data;
+
+    // Handle Initialization
+    if (type === 'init') {
+        try {
+            config = payload;
+            console.log('[Worker] Initialized with config:', config);
+            // Pre-load model?
+            await loadModel();
+            self.postMessage({ type: 'init_complete' });
+        } catch (err: any) {
+            console.error('[Worker] Init failed:', err);
+            // We can't reply with an ID here easily if it wasn't passed, but usually init is fire-and-forget or handled separately.
+        }
+        return;
+    }
+
+    if (action === 'inference') {
+        const { bitmap, crops } = e.data;
+        try {
+            if (!config) throw new Error("Worker not initialized");
+
+            await loadModel();
+            if (!session) throw new Error("Session not initialized");
+
+            const cropResults: CropResult[] = [];
+            const BATCH_SIZE = 8;
+            const REPORT_INTERVAL = 1; // Report progress every batch for smoothness
+
+            for (let i = 0; i < crops.length; i += BATCH_SIZE) {
+                const batchCrops = crops.slice(i, i + BATCH_SIZE);
+
+                // Process batch
+                const tensors = batchCrops.map((crop: CropRect) => extractCropToTensor(bitmap, crop));
+                const batchInput = batchTensors(tensors);
+
+                // Run inference
+                const results = await session.run({ pixel_values: batchInput });
+                const logits = results.logits?.data as Float32Array;
+
+                if (!logits) throw new Error("Invalid output");
+
+                // Parse logits
+                for (let j = 0; j < batchCrops.length; j++) {
+                    const cropLogits = Array.from(logits.slice(j * 2, (j + 1) * 2));
+                    const probs = softmax(cropLogits);
+                    cropResults.push({
+                        rect: batchCrops[j],
+                        aiProb: probs[0],
+                        realProb: probs[1]
+                    });
+                }
+
+                // Batch Progress Reporting
+                const processed = Math.min(i + BATCH_SIZE, crops.length);
+                // Only report if enough progress made or finished
+                if (processed % REPORT_INTERVAL === 0 || processed === crops.length) {
+                    self.postMessage({
+                        id,
+                        type: 'progress',
+                        processed,
+                        total: crops.length
+                    });
+                }
+
+                // Yield to allow message posting
+                await new Promise(r => setTimeout(r, 0));
+            }
+
+            // Aggregate
+            const maxAiProb = Math.max(...cropResults.map(r => r.aiProb));
+            const realProbCorresponding = 1 - maxAiProb;
+
+            const result: InferenceResult = {
+                isAI: maxAiProb > 0.5,
+                confidence: Math.round(maxAiProb > 0.5 ? maxAiProb * 100 : (1 - maxAiProb) * 100),
+                aiProbability: maxAiProb,
+                realProbability: realProbCorresponding,
+                inferenceTime: 0, // Main thread will calc total time
+                cropResults,
+                totalCrops: crops.length
+            };
+
+            // Send Result
+            self.postMessage({ id, type: 'result', data: result });
+
+            // Close bitmap to free memory
+            bitmap.close();
+
+        } catch (error: any) {
+            console.error('[Worker] Inference error:', error);
+            self.postMessage({ id, type: 'error', error: error.message });
+            if (bitmap) bitmap.close();
+        }
+    }
+};

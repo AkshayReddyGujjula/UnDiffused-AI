@@ -10,6 +10,15 @@ export default defineConfig({
   ],
   // Use relative paths for Chrome extension compatibility
   base: './',
+  worker: {
+    format: 'es',
+    plugins: () => [
+      // Add any worker-specific plugins here if needed
+    ]
+  },
+  optimizeDeps: {
+    exclude: ['onnxruntime-web']
+  },
   build: {
     rollupOptions: {
       input: {

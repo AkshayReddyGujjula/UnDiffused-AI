@@ -11,15 +11,22 @@ interface ResultViewProps {
     result: ScanResult;
     targetImage: string;
     onToolsClick?: () => void;
+    onDeepScanClick?: () => void;
+    isDeepScanning?: boolean;
+    deepScanProgress?: number;
 }
 
 export const ResultView: React.FC<ResultViewProps> = ({
     result,
     targetImage,
-    onToolsClick
+    onToolsClick,
+    onDeepScanClick,
+    isDeepScanning = false,
+    deepScanProgress = 0
 }) => {
     const [cursorPos, setCursorPos] = useState({ x: 50, y: 50 });
     const [toolsCursorPos, setToolsCursorPos] = useState({ x: 50, y: 50 });
+    const [deepScanCursorPos, setDeepScanCursorPos] = useState({ x: 50, y: 50 });
 
     const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -33,6 +40,13 @@ export const ResultView: React.FC<ResultViewProps> = ({
         const x = ((e.clientX - rect.left) / rect.width) * 100;
         const y = ((e.clientY - rect.top) / rect.height) * 100;
         setToolsCursorPos({ x, y });
+    };
+
+    const handleDeepScanMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        setDeepScanCursorPos({ x, y });
     };
 
     return (
@@ -165,6 +179,79 @@ export const ResultView: React.FC<ResultViewProps> = ({
                         />
                     </svg>
                     <span className="text-base font-semibold text-white/90 group-hover:text-white transition-colors relative z-10">Search with Google</span>
+                </button>
+
+                {/* Deep Scan Button */}
+                <button
+                    onClick={() => {
+                        if (onDeepScanClick && !isDeepScanning) onDeepScanClick();
+                    }}
+                    onMouseMove={handleDeepScanMouseMove}
+                    disabled={isDeepScanning}
+                    className="w-full py-2.5 px-4 rounded-xl border border-white/20 backdrop-blur-xl flex items-center justify-center gap-3 group shadow-lg hover:scale-[1.05] hover:z-20 transition-all duration-300 relative overflow-hidden disabled:opacity-100 disabled:hover:scale-100 disabled:cursor-wait"
+                    style={{
+                        background: `radial-gradient(circle 150px at ${deepScanCursorPos.x}% ${deepScanCursorPos.y}%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.15) 40%, rgba(255,255,255,0.1) 100%)`,
+                        transition: 'background 0.2s ease-out, transform 0.3s ease-out'
+                    }}
+                >
+                    {isDeepScanning && (
+                        <div
+                            style={{
+                                position: 'absolute',
+                                inset: 0,
+                                left: 0,
+                                width: `${Math.max(5, deepScanProgress)}%`,
+                                background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%)',
+                                backdropFilter: 'blur(12px) saturate(180%)',
+                                WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                                borderRight: '1.5px solid rgba(255, 255, 255, 0.4)',
+                                boxShadow: '0 0 30px rgba(255, 255, 255, 0.1), inset 0 0 20px rgba(255, 255, 255, 0.05)',
+                                transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                                overflow: 'hidden',
+                                zIndex: 5
+                            }}
+                        >
+                            {/* Glass Surface Polish */}
+                            <div style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '40%',
+                                background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, transparent 100%)'
+                            }} />
+
+                            {/* Flowing Water Shimmer */}
+                            <style>{`
+                                @keyframes fluid-flow {
+                                    0% { transform: translateX(-150%) skewX(-30deg); opacity: 0; }
+                                    50% { opacity: 1; }
+                                    100% { transform: translateX(250%) skewX(-30deg); opacity: 0; }
+                                }
+                            `}</style>
+                            <div style={{
+                                position: 'absolute',
+                                inset: 0,
+                                width: '200%',
+                                height: '100%',
+                                background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.45) 50%, transparent 100%)',
+                                animation: 'fluid-flow 2.5s infinite ease-in-out',
+                            }} />
+                        </div>
+                    )}
+
+                    {isDeepScanning ? (
+                        <span className="text-base font-bold text-white relative z-10 flex items-center gap-2" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+                            <span className="animate-pulse">Deep Scanning...</span>
+                        </span>
+                    ) : (
+                        <>
+                            <svg className="w-5 h-5 text-blue-400 group-hover:text-blue-300 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                            </svg>
+                            <span className="text-base font-semibold text-white/90 group-hover:text-white transition-colors relative z-10">Deep Scan (Slow)</span>
+                        </>
+                    )}
                 </button>
 
                 {/* Tools Button */}

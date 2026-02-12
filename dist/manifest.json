@@ -26,7 +26,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.tsx-loader-Co_UiBtZ.js"
+        "assets/index.tsx-loader-BqS22gda.js"
       ],
       "matches": [
         "<all_urls>"
@@ -43,8 +43,11 @@
         "<all_urls>"
       ],
       "resources": [
+        "models/model_quantized.onnx",
+        "wasm/ort-wasm-simd.wasm",
+        "wasm/ort-wasm.wasm",
         "assets/GlassCard-BMBPpFOK.js",
-        "assets/index.tsx-7pRIZuTl.js"
+        "assets/index.tsx-BtKWfwhP.js"
       ],
       "use_dynamic_url": false
     }

@@ -4,81 +4,7 @@
  * Handles context menu, offscreen document lifecycle, and message routing.
  */
 
-// Track offscreen document state
-let offscreenReady = false;
 
-/**
- * Create offscreen document for ONNX inference
- */
-async function ensureOffscreenDocument(): Promise<void> {
-    if (offscreenReady) return;
-
-    // Check if offscreen document already exists
-    const existingContexts = await chrome.runtime.getContexts({
-        contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
-        documentUrls: [chrome.runtime.getURL('src/offscreen/offscreen.html')]
-    });
-
-    if (existingContexts.length > 0) {
-        offscreenReady = true;
-        return;
-    }
-
-    // Create new offscreen document
-    await chrome.offscreen.createDocument({
-        url: 'src/offscreen/offscreen.html',
-        reasons: [chrome.offscreen.Reason.WORKERS],
-        justification: 'ONNX inference for AI image detection'
-    });
-
-    offscreenReady = true;
-    console.log('[UnDiffused] Offscreen document created');
-}
-
-/**
- * Analyze image via offscreen document
- */
-async function analyzeImage(imageUrl: string): Promise<{ isAI: boolean; confidence: number; heatmapData: number[]; filterData: number[] }> {
-    await ensureOffscreenDocument();
-
-    return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(
-            { type: 'ANALYZE', url: imageUrl },
-            (response) => {
-                if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                    return;
-                }
-
-                if (response?.success) {
-                    resolve({
-                        isAI: response.isAI,
-                        confidence: response.confidence,
-                        heatmapData: response.heatmapData || [],
-                        filterData: response.filterData || []
-                    });
-                } else {
-                    reject(new Error(response?.error || 'Analysis failed'));
-                }
-            }
-        );
-    });
-}
-
-/**
- * Send result to content script
- */
-async function sendResultToTab(tabId: number, imageUrl: string, result: { isAI: boolean; confidence: number; heatmapData: number[]; filterData: number[] }): Promise<void> {
-    try {
-        await chrome.tabs.sendMessage(tabId, {
-            type: 'SHOW_RESULT',
-            imageUrl,
-            ...result
-        });
-    } catch (error) {
-        console.error('[UnDiffused] Failed to send result to tab:', error);
-    }
-}
 
 /**
  * Handle context menu click
@@ -90,43 +16,19 @@ async function handleContextMenuClick(
     if (info.menuItemId !== 'undiffused-scan') return;
     if (!info.srcUrl || !tab?.id) return;
 
-    console.log('[UnDiffused] Scanning:', info.srcUrl);
+    console.log('[UnDiffused] Triggering scan for:', info.srcUrl);
 
-    const tabId = tab.id;
-
-    // Notify content script to show scanning state (don't block on this)
+    // Notify content script to start scanning
+    // The content script will handle the inference locally
     try {
-        await chrome.tabs.sendMessage(tabId, {
+        await chrome.tabs.sendMessage(tab.id, {
             type: 'SCANNING',
             imageUrl: info.srcUrl
         });
     } catch (e) {
-        console.warn('[UnDiffused] Could not notify content script of scanning state:', e);
-        // Continue anyway - the content script might not be ready yet
-    }
-
-    try {
-        const result = await analyzeImage(info.srcUrl);
-
-        // Try to send result to content script
-        try {
-            await sendResultToTab(tabId, info.srcUrl, result);
-        } catch (e) {
-            console.warn('[UnDiffused] Could not send result to content script:', e);
-            // Show result via notification as fallback
-            console.log('[UnDiffused] Result:', result.isAI ? 'AI-GENERATED' : 'REAL', result.confidence + '%');
-        }
-    } catch (error) {
-        console.error('[UnDiffused] Analysis failed:', error);
-        try {
-            await chrome.tabs.sendMessage(tabId, {
-                type: 'ERROR',
-                imageUrl: info.srcUrl,
-                error: error instanceof Error ? error.message : 'Unknown error'
-            });
-        } catch (e) {
-            console.warn('[UnDiffused] Could not send error to content script:', e);
-        }
+        console.warn('[UnDiffused] Could not notify content script:', e);
+        // If content script isn't loaded (e.g. extension updated/reloaded), 
+        // we might need to inject it or alert user to refresh.
     }
 }
 
@@ -145,21 +47,8 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener(handleContextMenuClick);
 
 // Listen for messages from popup
+// Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message.type === 'REQUEST_ANALYSIS') {
-        analyzeImage(message.url || '')
-            .then(result => {
-                sendResponse({ success: true, ...result });
-            })
-            .catch(error => {
-                console.error('[UnDiffused] Analysis error:', error);
-                sendResponse({ success: false, error: error.message });
-            });
-
-        // Return true to indicate async response
-        return true;
-    }
-
     // Fetch image and convert to data URL (CORS bypass for content scripts)
     if (message.type === 'FETCH_IMAGE_AS_DATA_URL') {
         const imageUrl = message.url;
@@ -207,17 +96,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             }
 
             try {
-                // 1. Notify content script to show "Scanning" state immediately
+                // Notify content script to show "Scanning" state immediately
+                // The content script will handle the inference itself
                 await chrome.tabs.sendMessage(activeTab.id, {
                     type: 'SCANNING',
                     imageUrl: dataUrl
                 });
-
-                // 2. Perform analysis in background (offscreen)
-                const result = await analyzeImage(dataUrl);
-
-                // 3. Send result to content script
-                await sendResultToTab(activeTab.id, dataUrl, result);
 
                 sendResponse({ success: true });
 
@@ -227,7 +111,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                 // Notify content script of error
                 chrome.tabs.sendMessage(activeTab.id, {
                     type: 'ERROR',
-                    error: error.message || 'Analysis failed'
+                    error: error.message || 'Scan trigger failed'
                 }).catch(e => console.warn('Could not send error to tab:', e));
 
                 sendResponse({ success: false, error: error.message });
