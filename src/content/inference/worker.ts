@@ -16,6 +16,8 @@ const TARGET_SIZE = 224;
 let session: ort.InferenceSession | null = null;
 let inferenceQueue: Promise<void> = Promise.resolve();
 
+
+
 // --- Helper: Softmax ---
 function softmax(logits: number[]): number[] {
     const max = Math.max(...logits);
@@ -36,7 +38,10 @@ function batchTensors(tensors: ort.Tensor[]): ort.Tensor {
     tensors.forEach((tensor, i) => {
         batchedData.set(tensor.data as Float32Array, i * singleTensorSize);
     });
-    return new ort.Tensor('float32', batchedData, [batchSize, channels, height, width]);
+    const tensor = new ort.Tensor('float32', batchedData, [batchSize, channels, height, width]);
+    // DEBUG: Log tensor shape
+    console.log('[Worker] Batch Tensor Shape:', tensor.dims);
+    return tensor;
 }
 
 // --- Helper: Extract Crop to Tensor (Worker Version) ---
@@ -188,16 +193,30 @@ async function processMessage(e: MessageEvent): Promise<void> {
                 await new Promise(r => setTimeout(r, 0));
             }
 
-            // Aggregate
-            const maxAiProb = Math.max(...cropResults.map(r => r.aiProb));
-            const realProbCorresponding = 1 - maxAiProb;
+            // Aggregate Results
+            // FIX: Use 2nd highest probability to filter out single-crop outliers (false positives)
+            // If we have enough crops (>=4), discard the single highest score.
+            const sortedCrops = [...cropResults].sort((a, b) => b.aiProb - a.aiProb);
+
+            let finalAiProb = 0;
+            if (sortedCrops.length >= 4) {
+                // Take 2nd highest (robust against 1 outlier)
+                finalAiProb = sortedCrops[1].aiProb;
+            } else if (sortedCrops.length > 0) {
+                // Fallback to max for small inputs
+                finalAiProb = sortedCrops[0].aiProb;
+            }
+
+            const isAI = finalAiProb > 0.5;
+            // Confidence = distance from 0.5, scaled to 0-100%
+            const confidence = Math.round(isAI ? finalAiProb * 100 : (1 - finalAiProb) * 100);
 
             const result: InferenceResult = {
-                isAI: maxAiProb > 0.5,
-                confidence: Math.round(maxAiProb > 0.5 ? maxAiProb * 100 : (1 - maxAiProb) * 100),
-                aiProbability: maxAiProb,
-                realProbability: realProbCorresponding,
-                inferenceTime: 0, // Main thread will calc total time
+                isAI,
+                confidence,
+                aiProbability: finalAiProb,
+                realProbability: 1 - finalAiProb,
+                inferenceTime: 0,
                 cropResults,
                 totalCrops: crops.length
             };

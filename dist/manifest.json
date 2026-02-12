@@ -26,7 +26,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.tsx-loader-BlayQZjj.js"
+        "assets/index.tsx-loader-BYMPPkhy.js"
       ],
       "matches": [
         "https://*/*",
@@ -60,7 +60,7 @@
       ],
       "resources": [
         "assets/GlassCard-BMBPpFOK.js",
-        "assets/index.tsx-D6WKwmLH.js"
+        "assets/index.tsx-BVpyCHqS.js"
       ],
       "use_dynamic_url": false
     }

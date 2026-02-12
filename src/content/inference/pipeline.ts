@@ -60,7 +60,9 @@ const initWorker = (): void => {
         type: 'init',
         payload: workerInitPayload
     });
-};
+}
+
+
 
 attachWorkerHandlers();
 initWorker();
