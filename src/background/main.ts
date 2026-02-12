@@ -193,6 +193,49 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // Return true to indicate async response
         return true;
     }
+
+    // Handle scan trigger from extension popup
+    if (message.type === 'TRIGGER_SCAN_FROM_POPUP') {
+        const dataUrl = message.url;
+
+        // Get the active tab
+        chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+            const activeTab = tabs[0];
+            if (!activeTab?.id) {
+                sendResponse({ success: false, error: 'No active tab found' });
+                return;
+            }
+
+            try {
+                // 1. Notify content script to show "Scanning" state immediately
+                await chrome.tabs.sendMessage(activeTab.id, {
+                    type: 'SCANNING',
+                    imageUrl: dataUrl
+                });
+
+                // 2. Perform analysis in background (offscreen)
+                const result = await analyzeImage(dataUrl);
+
+                // 3. Send result to content script
+                await sendResultToTab(activeTab.id, dataUrl, result);
+
+                sendResponse({ success: true });
+
+            } catch (error: any) {
+                console.error('[UnDiffused] Popup scan failed:', error);
+
+                // Notify content script of error
+                chrome.tabs.sendMessage(activeTab.id, {
+                    type: 'ERROR',
+                    error: error.message || 'Analysis failed'
+                }).catch(e => console.warn('Could not send error to tab:', e));
+
+                sendResponse({ success: false, error: error.message });
+            }
+        });
+
+        return true; // Async response
+    }
 });
 
 console.log('[UnDiffused] Background service worker ready');

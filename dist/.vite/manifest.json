@@ -5,27 +5,27 @@
     "src": "../../../../../@crx/manifest",
     "isEntry": true
   },
-  "_ResultView-BXWFaSCq.js": {
-    "file": "assets/ResultView-BXWFaSCq.js",
-    "name": "ResultView"
+  "_GlassCard-BMBPpFOK.js": {
+    "file": "assets/GlassCard-BMBPpFOK.js",
+    "name": "GlassCard"
   },
-  "_index-C7XQVhVw.js": {
-    "file": "assets/index-C7XQVhVw.js",
+  "_index-CungNWAP.css": {
+    "file": "assets/index-CungNWAP.css",
+    "src": "_index-CungNWAP.css"
+  },
+  "_index-D_6cNeqJ.js": {
+    "file": "assets/index-D_6cNeqJ.js",
     "name": "index",
     "imports": [
-      "_ResultView-BXWFaSCq.js"
+      "_GlassCard-BMBPpFOK.js"
     ],
     "css": [
-      "assets/index-Dodk5KOK.css"
+      "assets/index-CungNWAP.css"
     ]
   },
-  "_index-Dodk5KOK.css": {
-    "file": "assets/index-Dodk5KOK.css",
-    "src": "_index-Dodk5KOK.css"
-  },
-  "_index.tsx-loader-BDmXFLHl.js": {
-    "file": "assets/index.tsx-loader-BDmXFLHl.js",
-    "src": "_index.tsx-loader-BDmXFLHl.js"
+  "_index.tsx-loader-Co_UiBtZ.js": {
+    "file": "assets/index.tsx-loader-Co_UiBtZ.js",
+    "src": "_index.tsx-loader-Co_UiBtZ.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -36,18 +36,18 @@
     "src": "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm"
   },
   "src/background/main.ts": {
-    "file": "assets/main.ts-CBHMjbif.js",
+    "file": "assets/main.ts-DAVA8s_u.js",
     "name": "main.ts",
     "src": "src/background/main.ts",
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-DpNxsmnn.js",
+    "file": "assets/index.tsx-7pRIZuTl.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,
     "imports": [
-      "_ResultView-BXWFaSCq.js"
+      "_GlassCard-BMBPpFOK.js"
     ]
   },
   "src/offscreen/offscreen.html": {
@@ -63,14 +63,14 @@
     ]
   },
   "src/popup/popup.html": {
-    "file": "assets/popup.html-BGHgkyHY.js",
+    "file": "assets/popup.html-uIfCaLg6.js",
     "name": "popup.html",
     "src": "src/popup/popup.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_index-C7XQVhVw.js",
-      "_ResultView-BXWFaSCq.js"
+      "_index-D_6cNeqJ.js",
+      "_GlassCard-BMBPpFOK.js"
     ]
   }
 }
