@@ -49,19 +49,68 @@ export const ResultView: React.FC<ResultViewProps> = ({
         setDeepScanCursorPos({ x, y });
     };
 
+    const getResultDisplay = () => {
+        const { isAI, confidence } = result;
+
+        if (confidence < 66) {
+            return {
+                label: "Inconclusive",
+                containerClass: "bg-yellow-500/20 border border-yellow-500/30",
+                dotClass: "bg-yellow-400",
+                textClass: "text-yellow-400",
+                barClass: "bg-yellow-500"
+            };
+        }
+
+        if (isAI) {
+            if (confidence >= 90) {
+                return {
+                    label: "AI Generated",
+                    containerClass: "bg-red-500/20 border border-red-500/30",
+                    dotClass: "bg-red-400",
+                    textClass: "text-red-400",
+                    barClass: "bg-red-500"
+                };
+            }
+            return {
+                label: "Likely AI Generated",
+                containerClass: "bg-red-500/20 border border-red-500/30",
+                dotClass: "bg-red-400",
+                textClass: "text-red-400",
+                barClass: "bg-red-500"
+            };
+        } else {
+            if (confidence >= 90) {
+                return {
+                    label: "Real Image",
+                    containerClass: "bg-green-500/20 border border-green-500/30",
+                    dotClass: "bg-green-400",
+                    textClass: "text-green-400",
+                    barClass: "bg-green-500"
+                };
+            }
+            return {
+                label: "Likely a Real Image",
+                containerClass: "bg-green-500/20 border border-green-500/30",
+                dotClass: "bg-green-400",
+                textClass: "text-green-400",
+                barClass: "bg-green-500"
+            };
+        }
+    };
+
+    const display = getResultDisplay();
+
     return (
         <div className="animate-fade-in">
             {/* Verdict Badge */}
             <div className={`
                 inline-flex items-center gap-2 px-4 py-2 rounded-full mb-4
-                ${result.isAI
-                    ? 'bg-red-500/20 border border-red-500/30'
-                    : 'bg-green-500/20 border border-green-500/30'
-                }
+                ${display.containerClass}
             `}>
-                <div className={`w-2 h-2 rounded-full ${result.isAI ? 'bg-red-400' : 'bg-green-400'}`} />
-                <span className={`text-sm font-medium ${result.isAI ? 'text-red-400' : 'text-green-400'}`}>
-                    {result.isAI ? 'AI-GENERATED' : 'REAL IMAGE'}
+                <div className={`w-2 h-2 rounded-full ${display.dotClass}`} />
+                <span className={`text-sm font-medium ${display.textClass}`}>
+                    {display.label}
                 </span>
             </div>
 
@@ -73,8 +122,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
                 </div>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                     <div
-                        className={`h-full rounded-full transition-all duration-500 ${result.isAI ? 'bg-red-500' : 'bg-green-500'
-                            }`}
+                        className={`h-full rounded-full transition-all duration-500 ${display.barClass}`}
                         style={{ width: `${result.confidence}%` }}
                     />
                 </div>
