@@ -20,4 +20,7 @@ export interface InferenceResult {
     inferenceTime: number;
     cropResults?: CropResult[];
     totalCrops?: number;
+    heatmapData?: number[];
+    heatmapWidth?: number;
+    heatmapHeight?: number;
 }

@@ -1,4 +1,5 @@
-import { generateGridCrops, generateDeepScanTiles } from './crops';
+import { generateGridCrops, generateDeepScanTiles, getAdaptiveCrops } from './crops';
+import { computeQualityMap } from './saliency';
 import { InferenceResult, CropRect } from './types';
 import Worker from './worker?worker&inline';
 
@@ -91,10 +92,34 @@ export async function runMultiCropInference(
     const width = bitmap.width;
     const height = bitmap.height;
 
-    // 1. Generate Crops (Main Thread - fast)
-    const crops: CropRect[] = mode === 'deep'
-        ? generateDeepScanTiles(width, height)
-        : generateGridCrops(width, height);
+    // 1. Generate Crops (Main Thread)
+    let crops: CropRect[] = [];
+    let heatmapData: Float32Array | undefined;
+
+    if (mode === 'deep') {
+        crops = generateDeepScanTiles(width, height);
+    } else {
+        // --- Adaptive Subject-Aware Cropping ---
+
+        // 1. Extract Pixel Data
+        const canvas = new OffscreenCanvas(width, height);
+        const ctx = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
+        ctx.drawImage(bitmap, 0, 0);
+        const imageData = ctx.getImageData(0, 0, width, height);
+
+        // 2. Compute Saliency/Quality Map
+        const qualityMap = computeQualityMap(imageData);
+        heatmapData = qualityMap; // Store for valid visualization
+
+        // 3. Generate Adaptive Crops
+        crops = getAdaptiveCrops(width, height, qualityMap, 9);
+
+        // Fallback: If we somehow got 0 crops (shouldn't happen with fallback logic in getAdaptiveCrops), use grid
+        if (crops.length === 0) {
+            console.warn('[Pipeline] Adaptive cropping failed, falling back to grid');
+            crops = generateGridCrops(width, height);
+        }
+    }
 
     if (crops.length === 0) throw new Error("No valid crops generated");
 
@@ -113,6 +138,16 @@ export async function runMultiCropInference(
         pendingRequests.set(id, {
             resolve: (res) => {
                 clearTimeout(timeoutId);
+                // Attach the computed heatmap data to the result
+                if (heatmapData) {
+                    // Convert Float32Array to number[] for compatibility if needed, 
+                    // or change the type definition. For now assuming number[] or compatible.
+                    // The UI expects number[] or typed array. The type says number[].
+                    // Let's convert to regular array to be safe with messaging/types
+                    res.heatmapData = Array.from(heatmapData);
+                    res.heatmapWidth = width;
+                    res.heatmapHeight = height;
+                }
                 resolve(res);
             },
             reject: (err) => {

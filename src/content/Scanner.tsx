@@ -79,7 +79,10 @@ export const Scanner: React.FC = () => {
             setResult({
                 isAI: res.isAI,
                 confidence: res.confidence,
-                heatmapData: [],
+                heatmapData: res.heatmapData || [],
+                heatmapWidth: res.heatmapWidth,
+                heatmapHeight: res.heatmapHeight,
+                cropResults: res.cropResults,
                 filterData: []
             });
             setState('result');

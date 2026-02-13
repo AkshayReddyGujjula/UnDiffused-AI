@@ -4,7 +4,10 @@ export interface ScanResult {
     isAI: boolean;
     confidence: number;
     heatmapData?: number[];
+    heatmapWidth?: number;
+    heatmapHeight?: number;
     filterData?: number[];
+    cropResults?: { rect: { x: number, y: number, width: number, height: number } }[];
 }
 
 interface ResultViewProps {
@@ -27,6 +30,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
     const [cursorPos, setCursorPos] = useState({ x: 50, y: 50 });
     const [toolsCursorPos, setToolsCursorPos] = useState({ x: 50, y: 50 });
     const [deepScanCursorPos, setDeepScanCursorPos] = useState({ x: 50, y: 50 });
+    const [heatmapOpacity, setHeatmapOpacity] = useState(0);
 
     const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -101,6 +105,17 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
     const display = getResultDisplay();
 
+    // Repurposed heatmapOpacity as slider value (0-100)
+    // 0 = No crops visible
+    // 100 = All crops visible (reveal from left)
+
+
+
+
+
+    // Normalize opacity/slider to pure reveal progress
+    const revealProgress = heatmapOpacity;
+
     return (
         <div className="animate-fade-in">
             {/* Verdict Badge */}
@@ -130,12 +145,101 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
             {/* Image Preview with bottom margin for spacing */}
             {targetImage && (
-                <div className="mt-4 mb-2 relative rounded-xl overflow-hidden border border-white/10 bg-black/20">
+                <div className="mt-4 mb-4 relative rounded-xl overflow-hidden border border-white/10 bg-black/20 group">
                     <img
                         src={targetImage}
                         alt="Analyzed"
-                        className="w-full h-auto max-h-[400px] object-contain block"
+                        className="w-full h-auto max-h-[400px] object-contain block relative z-0"
                     />
+
+                    {/* Crop Visualization Overlay */}
+                    {result.cropResults && result.cropResults.length > 0 && result.heatmapWidth && result.heatmapHeight && (
+                        <div className="absolute inset-0 z-10 pointer-events-none">
+                            {result.cropResults.map((crop, idx) => {
+                                // Calculate position percentages
+                                const left = (crop.rect.x / result.heatmapWidth!) * 100;
+                                const top = (crop.rect.y / result.heatmapHeight!) * 100;
+                                const width = (crop.rect.width / result.heatmapWidth!) * 100;
+                                const height = (crop.rect.height / result.heatmapHeight!) * 100;
+
+                                // Reveal logic:
+                                // Map slider (0-100) to X-axis position (0-100).
+                                // If crop's center X is less than slider value, show it.
+                                // Determine invalid/default dimensions if missing
+                                // (Logic is handled by map calculation)
+
+                                // Reveal logic
+                                const centerX = left + (width / 2);
+                                const isVisible = centerX <= revealProgress;
+
+                                // Build inline style for robust coloring
+                                let borderColor = 'rgba(255, 255, 255, 0.9)';
+                                let bgColor = 'rgba(255, 255, 255, 0.2)';
+
+                                if (result.confidence >= 66) {
+                                    if (result.isAI) {
+                                        borderColor = 'rgba(239, 68, 68, 0.9)'; // Red-500
+                                        bgColor = 'rgba(239, 68, 68, 0.3)';
+                                    } else {
+                                        borderColor = 'rgba(34, 197, 94, 0.9)'; // Green-500
+                                        bgColor = 'rgba(34, 197, 94, 0.3)';
+                                    }
+                                }
+
+                                return (
+                                    <div
+                                        key={idx}
+                                        className="absolute transition-all duration-300 shadow-[0_0_10px_rgba(0,0,0,0.2)]"
+                                        style={{
+                                            left: `${left}%`,
+                                            top: `${top}%`,
+                                            width: `${width}%`,
+                                            height: `${height}%`,
+                                            opacity: isVisible ? 1 : 0,
+                                            transform: isVisible ? 'scale(1)' : 'scale(0.95)',
+                                            border: `1px solid ${borderColor}`,
+                                            backgroundColor: bgColor
+                                        }}
+                                    />
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Crop Slider Control */}
+            {result.cropResults && result.cropResults.length > 0 && (
+                <div className="mb-8 px-1 animate-fade-in relative z-10">
+                    <div className="relative h-6 flex items-center group">
+                        {/* Track */}
+                        <div className="absolute inset-x-0 h-1.5 bg-white/10 rounded-full overflow-hidden backdrop-blur-sm border border-white/5">
+                            <div
+                                className={`h-full ${display.barClass} transition-all duration-100 ease-out`}
+                                style={{ width: `${heatmapOpacity}%` }}
+                            />
+                        </div>
+
+                        {/* Thumb (Visual-only, input covers it) */}
+                        <div
+                            className="absolute w-4 h-4 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.5)] border-2 border-white/20 pointer-events-none transition-all duration-100 ease-out"
+                            style={{
+                                left: `calc(${heatmapOpacity}% - 8px)`,
+                                boxShadow: `0 0 15px rgba(255,255,255,${0.2 + heatmapOpacity / 200})`
+                            }}
+                        />
+
+                        {/* Input */}
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={heatmapOpacity}
+                            onChange={(e) => setHeatmapOpacity(Number(e.target.value))}
+                            className="absolute inset-0 w-full h-full appearance-none cursor-ew-resize z-20"
+                            style={{ opacity: 0, margin: 0 }}
+                        />
+                    </div>
                 </div>
             )}
 
