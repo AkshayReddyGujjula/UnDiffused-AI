@@ -4,7 +4,10 @@ import { InferenceResult, CropRect } from './types';
 import Worker from './worker?worker&inline';
 
 const workerInitPayload = {
-    modelPath: chrome.runtime.getURL('models/model_quantized.onnx'),
+    modelPaths: {
+        global: chrome.runtime.getURL('models/model_global_quantized.onnx'),
+        local: chrome.runtime.getURL('models/model_local_quantized.onnx'),
+    },
     wasmPaths: {
         'ort-wasm.wasm': chrome.runtime.getURL('wasm/ort-wasm.wasm'),
         'ort-wasm-simd.wasm': chrome.runtime.getURL('wasm/ort-wasm-simd.wasm'),

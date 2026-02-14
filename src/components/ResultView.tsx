@@ -8,6 +8,8 @@ export interface ScanResult {
     heatmapHeight?: number;
     filterData?: number[];
     cropResults?: { rect: { x: number, y: number, width: number, height: number } }[];
+    globalProbability?: number;
+    localProbability?: number;
 }
 
 interface ResultViewProps {
@@ -171,6 +173,10 @@ export const ResultView: React.FC<ResultViewProps> = ({
                                 // Reveal logic
                                 const centerX = left + (width / 2);
                                 const isVisible = centerX <= revealProgress;
+
+                                // Filter out Global Crop (approx > 90% of area)
+                                // We check if width/height are close to 100%
+                                if (width > 90 && height > 90) return null;
 
                                 // Build inline style for robust coloring
                                 let borderColor = 'rgba(255, 255, 255, 0.9)';

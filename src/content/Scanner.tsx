@@ -83,6 +83,8 @@ export const Scanner: React.FC = () => {
                 heatmapWidth: res.heatmapWidth,
                 heatmapHeight: res.heatmapHeight,
                 cropResults: res.cropResults,
+                globalProbability: res.globalProbability,
+                localProbability: res.localProbability,
                 filterData: []
             });
             setState('result');
@@ -97,6 +99,69 @@ export const Scanner: React.FC = () => {
             setState('error');
             setIsDeepScanning(false);
             imageBitmapRef.current = null;
+        }
+    };
+
+    // Helper to find best image source (e.g. from srcset or parent link)
+    const findHighestResImageUrl = (originalUrl: string): string => {
+        try {
+            // 1. Find the img element in the DOM
+            const images = Array.from(document.querySelectorAll('img'));
+            const img = images.find(i => i.src === originalUrl || i.currentSrc === originalUrl);
+
+            if (!img) return originalUrl;
+
+            // 2. Check for higher resolution in srcset
+            if (img.srcset) {
+                const candidates = img.srcset.split(',').map(s => {
+                    const parts = s.trim().split(/\s+/);
+                    const url = parts[0];
+                    const descriptor = parts[1];
+                    let width = 0;
+                    if (descriptor && descriptor.endsWith('w')) {
+                        width = parseInt(descriptor.slice(0, -1), 10);
+                    }
+                    // If 'x' descriptor (pixel density), assume standard width * density
+                    return { url, width };
+                });
+
+                // Sort by width descending
+                candidates.sort((a, b) => b.width - a.width);
+                if (candidates.length > 0 && candidates[0].width > 0) {
+                    // Check if candidate is significantly larger or different
+                    // Actually, just taking the largest is usually safer for "full res" intent.
+                    // But ensure it's a valid URL.
+                    if (candidates[0].url) return candidates[0].url;
+                }
+            }
+
+            // 3. Check for high-res data attributes (Google Images specific and general lazy load)
+            const dataSrc = img.getAttribute('data-src') || img.getAttribute('data-full-src') || img.getAttribute('data-large-src');
+            if (dataSrc) return dataSrc;
+
+            // 4. Check if wrapped in an anchor link to an image (common in galleries)
+            const parentLink = img.closest('a');
+            if (parentLink && parentLink.href) {
+                // Check if href looks like an image
+                if (/\.(jpg|jpeg|png|webp)$/i.test(parentLink.href)) {
+                    return parentLink.href;
+                }
+                // For Google Images/Photos, sometimes the anchor href is the full image page, 
+                // but we might not want to navigate. 
+                // However, specific gallery sites link directly to the file.
+            }
+
+            // 5. Google Images specific: often the image is inside a specific container structure.
+            // But usually the srcset or clicked element's currentSrc is what we get.
+            // If the user right-clicked a thumbnail, currentSrc is the thumbnail.
+            // If the full image is not loaded in DOM, we can't easily get it without fetching the page.
+            // But usually `srcset` covers 90% of cases.
+
+            return img.currentSrc || originalUrl;
+
+        } catch (e) {
+            console.warn('[UnDiffused] Error finding high-res image:', e);
+            return originalUrl;
         }
     };
 
@@ -120,12 +185,17 @@ export const Scanner: React.FC = () => {
             if (typed.type === 'SCANNING' && typeof typed.imageUrl === 'string') {
                 isShuttingDownRef.current = false;
                 scanTokenRef.current += 1;
-                setTargetImage(typed.imageUrl);
+
+                // Enhancement: Try to find a higher resolution version of the image
+                const highResUrl = findHighestResImageUrl(typed.imageUrl);
+                console.log(`[UnDiffused] Upgrading Image URL: ${typed.imageUrl} -> ${highResUrl}`);
+
+                setTargetImage(highResUrl);
                 setResult(null);
                 setError(null);
                 // Reset cache on new scan
                 imageBitmapRef.current = null;
-                runScan(typed.imageUrl, 'default');
+                runScan(highResUrl, 'default');
             } else if (typed.type === 'ERROR') {
                 setState('error');
                 setError('An error occurred in background');

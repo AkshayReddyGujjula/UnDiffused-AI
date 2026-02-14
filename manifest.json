@@ -41,7 +41,8 @@
     "web_accessible_resources": [
         {
             "resources": [
-                "models/model_quantized.onnx",
+                "models/model_global_quantized.onnx",
+                "models/model_local_quantized.onnx",
                 "wasm/ort-wasm-simd.wasm",
                 "wasm/ort-wasm.wasm",
                 "wasm/ort-wasm-threaded.wasm",

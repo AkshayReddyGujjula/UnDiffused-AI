@@ -23,4 +23,8 @@ export interface InferenceResult {
     heatmapData?: number[];
     heatmapWidth?: number;
     heatmapHeight?: number;
+
+    // Dual-Model Specifics
+    globalProbability?: number;
+    localProbability?: number;
 }
