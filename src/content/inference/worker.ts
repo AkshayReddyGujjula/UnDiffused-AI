@@ -177,18 +177,29 @@ async function processMessage(e: MessageEvent): Promise<void> {
             await loadModels();
             if (!sessionGlobal || !sessionLocal) throw new Error("Sessions not initialized");
 
-            // --- STAGE 1: Global Scan ---
-            // Extract global crop (first crop is always global/full image if standard generation used)
-            // Or just extract full image to 224x224
-            const globalCrop = { x: 0, y: 0, width: bitmap.width, height: bitmap.height, label: 'Global' };
-            const globalTensor = extractCropToTensor(bitmap, globalCrop);
+            // --- STAGE 1: Global Scan (4-Crop Grid Strategy) ---
+            // Divide image into 4 equal quadrants to preserve detail
+            const halfW = Math.floor(bitmap.width / 2);
+            const halfH = Math.floor(bitmap.height / 2);
 
-            // Run Global Model
-            const globalProbs = await runInference(sessionGlobal, globalTensor);
-            const globalAiProb = globalProbs[0]; // Assuming batch size 1
-            const globalRealProb = 1 - globalAiProb;
+            const globalCrops: CropRect[] = [
+                { x: 0, y: 0, width: halfW, height: halfH, label: 'Global_TL' },
+                { x: halfW, y: 0, width: halfW, height: halfH, label: 'Global_TR' },
+                { x: 0, y: halfH, width: halfW, height: halfH, label: 'Global_BL' },
+                { x: halfW, y: halfH, width: halfW, height: halfH, label: 'Global_BR' }
+            ];
 
-            console.log(`[Worker] Global AI Prob: ${globalAiProb.toFixed(4)}`);
+            // Extract and Batch
+            const globalTensors = globalCrops.map(crop => extractCropToTensor(bitmap, crop));
+            const globalBatchInput = batchTensors(globalTensors);
+
+            // Run Global Model on Batch of 4
+            const globalBatchProbs = await runInference(sessionGlobal, globalBatchInput);
+
+            // Average the 4 probabilities
+            const globalAiProb = globalBatchProbs.reduce((a, b) => a + b, 0) / globalBatchProbs.length;
+
+            console.log(`[Worker] Global AI Prob (Avg of 4 crops): ${globalAiProb.toFixed(4)}`);
 
             // --- Fast Exit Strategy (Normal Mode Only) ---
             let finalAiProb = globalAiProb;
@@ -255,20 +266,15 @@ async function processMessage(e: MessageEvent): Promise<void> {
                     resultLocalProb = localAiProb;
 
                     // Add global result for UI visualization if needed
-                    cropResults.unshift({
-                        rect: globalCrop,
-                        aiProb: globalAiProb,
-                        realProb: globalRealProb
-                    });
+                    // User requested to hide global crops.
+                    // If we wanted to, we could add a "dummy" global crop covering 100% 
+                    // or just leave it out. Leaving it out.
 
                 }
             } else {
                 console.log('[Worker] Fast Exit triggered.');
-                cropResults.push({
-                    rect: globalCrop,
-                    aiProb: globalAiProb,
-                    realProb: globalRealProb
-                });
+                // User requested to hide global crops.
+                // cropResults is empty here, which is fine.
             }
 
 
