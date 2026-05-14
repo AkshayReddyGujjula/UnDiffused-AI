@@ -1,284 +1,253 @@
 import * as ort from 'onnxruntime-web';
 import { CropRect, InferenceResult, CropResult } from './types';
+import { ModelMeta, loadModelMeta, validateSession, extractAiProbability } from './modelMeta';
+import { FusionConfig, loadFusionConfig, computeFusedScore, buildFusionFeatures } from './fusion';
 
 console.log('[Worker] Worker script loaded and starting...');
 
-// Configuration (received from main thread)
-let config: {
-    modelPaths: { global: string; local: string };
-    wasmPaths: string | Record<string, string>;
-} | null = null;
+// ─── Configuration ────────────────────────────────────────────────────────────
 
-const MEAN = [0.485, 0.456, 0.406];
-const STD = [0.229, 0.224, 0.225];
-const TARGET_SIZE = 224;
+interface WorkerConfig {
+    modelPaths: {
+        global: string;
+        local: string;
+        globalMeta: string;
+        localMeta: string;
+        fusion: string;
+    };
+    wasmPaths: string | Record<string, string>;
+}
+
+let config: WorkerConfig | null = null;
+let metaGlobal: ModelMeta | null = null;
+let metaLocal: ModelMeta | null = null;
+let fusionConfig: FusionConfig | null = null;
 
 let sessionGlobal: ort.InferenceSession | null = null;
 let sessionLocal: ort.InferenceSession | null = null;
+let localModelLoading: Promise<ort.InferenceSession> | null = null;
+
 let inferenceQueue: Promise<void> = Promise.resolve();
 
+// Uncertainty gate: only run local scan when global is between these thresholds.
+const GATE_LOW = 0.15;
+const GATE_HIGH = 0.85;
 
-// --- Helper: Softmax ---
-function softmax(logits: number[]): number[] {
-    const max = Math.max(...logits);
-    const exps = logits.map(x => Math.exp(x - max));
-    const sum = exps.reduce((a, b) => a + b, 0);
-    return exps.map(x => x / sum);
-}
+// Deep-scan early-stop: if top-20-tile mean exceeds these, stop early.
+const EARLY_STOP_HIGH = 0.90;
+const EARLY_STOP_LOW = 0.10;
+const EARLY_STOP_MIN_TILES = 20;
 
-// --- Helper: Sigmoid ---
-function sigmoid(logit: number): number {
-    return 1 / (1 + Math.exp(-logit));
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// --- Helper: Batch Tensors ---
 function batchTensors(tensors: ort.Tensor[]): ort.Tensor {
-    if (tensors.length === 0) throw new Error("No tensors to batch");
+    if (tensors.length === 0) throw new Error('No tensors to batch');
     const batchSize = tensors.length;
     const channels = 3;
     const height = 224;
     const width = 224;
-    const singleTensorSize = channels * height * width;
-    const batchedData = new Float32Array(batchSize * singleTensorSize);
-    tensors.forEach((tensor, i) => {
-        batchedData.set(tensor.data as Float32Array, i * singleTensorSize);
-    });
-    const tensor = new ort.Tensor('float32', batchedData, [batchSize, channels, height, width]);
-    return tensor;
+    const singleSize = channels * height * width;
+    const batchedData = new Float32Array(batchSize * singleSize);
+    tensors.forEach((t, i) => batchedData.set(t.data as Float32Array, i * singleSize));
+    return new ort.Tensor('float32', batchedData, [batchSize, channels, height, width]);
 }
 
-// --- Helper: Extract Crop to Tensor (Worker Version) ---
 function extractCropToTensor(
-    sourceBitmap: ImageBitmap, // Using ImageBitmap in worker
-    crop: CropRect
+    bitmap: ImageBitmap,
+    crop: CropRect,
+    meta: ModelMeta
 ): ort.Tensor {
-    const canvas = new OffscreenCanvas(TARGET_SIZE, TARGET_SIZE);
+    const size = meta.input_size;
+    const canvas = new OffscreenCanvas(size, size);
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error("Failed to get context");
+    if (!ctx) throw new Error('Failed to get OffscreenCanvas 2d context');
 
-    ctx.drawImage(
-        sourceBitmap,
-        crop.x, crop.y, crop.width, crop.height,
-        0, 0, TARGET_SIZE, TARGET_SIZE
-    );
+    ctx.drawImage(bitmap, crop.x, crop.y, crop.width, crop.height, 0, 0, size, size);
+    const { data } = ctx.getImageData(0, 0, size, size);
+    const float32 = new Float32Array(3 * size * size);
+    const [mr, mg, mb] = meta.normalization.mean;
+    const [sr, sg, sb] = meta.normalization.std;
 
-    const imgData = ctx.getImageData(0, 0, TARGET_SIZE, TARGET_SIZE);
-    const { data } = imgData;
-    const float32Data = new Float32Array(3 * TARGET_SIZE * TARGET_SIZE);
-
-    for (let i = 0; i < TARGET_SIZE * TARGET_SIZE; i++) {
-        const r = data[i * 4];
-        const g = data[i * 4 + 1];
-        const b = data[i * 4 + 2];
-        float32Data[i] = (r / 255.0 - MEAN[0]) / STD[0];
-        float32Data[i + TARGET_SIZE * TARGET_SIZE] = (g / 255.0 - MEAN[1]) / STD[1];
-        float32Data[i + 2 * TARGET_SIZE * TARGET_SIZE] = (b / 255.0 - MEAN[2]) / STD[2];
+    for (let i = 0; i < size * size; i++) {
+        float32[i]              = (data[i * 4]     / 255.0 - mr) / sr;
+        float32[i + size * size]    = (data[i * 4 + 1] / 255.0 - mg) / sg;
+        float32[i + 2 * size * size] = (data[i * 4 + 2] / 255.0 - mb) / sb;
     }
 
-    return new ort.Tensor('float32', float32Data, [1, 3, TARGET_SIZE, TARGET_SIZE]);
+    return new ort.Tensor('float32', float32, [1, 3, size, size]);
 }
 
-// --- Model Loader ---
-async function loadModels() {
-    if (sessionGlobal && sessionLocal) return;
-    if (!config) throw new Error("Worker not initialized with config");
+// ─── Model Loading ────────────────────────────────────────────────────────────
 
-    try {
-        // Initialize ORT env with paths
-        ort.env.wasm.wasmPaths = config.wasmPaths;
-        ort.env.wasm.numThreads = 1;
-        ort.env.wasm.simd = true;
+async function loadGlobalModel(): Promise<void> {
+    if (sessionGlobal) return;
+    if (!config) throw new Error('Worker not initialized with config');
 
+    ort.env.wasm.wasmPaths = config.wasmPaths;
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.simd = true;
+
+    const options: ort.InferenceSession.SessionOptions = {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all',
+        enableCpuMemArena: true,
+    };
+
+    sessionGlobal = await ort.InferenceSession.create(config.modelPaths.global, options);
+    validateSession(sessionGlobal, metaGlobal!, 'GlobalModel');
+    console.log('[Worker] Global model loaded');
+}
+
+async function loadLocalModel(): Promise<ort.InferenceSession> {
+    if (sessionLocal) return sessionLocal;
+
+    if (!config) throw new Error('Worker not initialized with config');
+    if (!localModelLoading) {
         const options: ort.InferenceSession.SessionOptions = {
             executionProviders: ['wasm'],
             graphOptimizationLevel: 'all',
             enableCpuMemArena: true,
         };
-
-        const [global, local] = await Promise.all([
-            ort.InferenceSession.create(config.modelPaths.global, options),
-            ort.InferenceSession.create(config.modelPaths.local, options)
-        ]);
-
-        sessionGlobal = global;
-        sessionLocal = local;
-        console.log('[Worker] Both models loaded successfully');
-    } catch (e) {
-        console.error('[Worker] Model load failed', e);
-        throw e;
+        localModelLoading = ort.InferenceSession.create(config.modelPaths.local, options).then(s => {
+            validateSession(s, metaLocal!, 'LocalModel');
+            sessionLocal = s;
+            console.log('[Worker] Local model loaded (lazy)');
+            return s;
+        });
     }
+    return localModelLoading;
 }
 
-// --- Inference Helpers ---
+// ─── Inference ────────────────────────────────────────────────────────────────
 
-async function runInference(session: ort.InferenceSession, inputTensor: ort.Tensor): Promise<number[]> {
-    const inputName = session.inputNames[0];
-    const outputName = session.outputNames[0]; // Assuming single output for simplicity
-    const results = await session.run({ [inputName]: inputTensor });
-    const outputTensor = results[outputName];
-
-    // Handle both [Batch, 1] (Sigmoid) and [Batch, 2] (Softmax) output shapes
+async function runBatchInference(
+    session: ort.InferenceSession,
+    meta: ModelMeta,
+    inputTensor: ort.Tensor
+): Promise<number[]> {
+    const feeds = { [meta.input_name]: inputTensor };
+    const results = await session.run(feeds);
+    const outputTensor = results[meta.output_name];
     const outputData = outputTensor.data as Float32Array;
-    const dims = outputTensor.dims;
-    const batchSize = dims[0];
-    const classCount = dims[1] || 1;
+    const batchSize = outputTensor.dims[0] as number;
 
-    const probabilities: number[] = [];
-
+    const probs: number[] = [];
     for (let i = 0; i < batchSize; i++) {
-        if (classCount === 2) {
-            const logits = Array.from(outputData.slice(i * 2, (i + 1) * 2));
-            const probs = softmax(logits);
-            probabilities.push(probs[0]); // Class 0 is usually AI? Wait, usually Class 1 is target.
-            // Convention check: Usually Index 0 = Real, Index 1 = Fake/AI? 
-            // Or Index 0 = AI, Index 1 = Real? 
-            // In standard "UniversalFakeDetect", 0=Real, 1=Fake.
-            // Let's assume standard: 1 = AI. 
-            // WAIT - In previous worker code: `aiProb = probs[0]`. 
-            // That implies the user trained it such that 0 is AI. 
-            // I will stick to the previous code's convention: Index 0 is AI.
-        } else {
-            const raw = outputData[i];
-            // If already probability
-            const val = raw >= 0 && raw <= 1 ? raw : sigmoid(raw);
-            probabilities.push(val);
-            // If binary, is 1 AI or 0 AI? 
-            // Usually 1 is positive class (AI). 
-            // If previous code used probs[0] as AI, then for binary, it requires testing.
-            // Let's assume 1=AI for binary models unless specified.
-        }
+        probs.push(extractAiProbability(outputData, i, meta));
     }
-    return probabilities;
+    return probs;
 }
 
+// ─── Message Handler ──────────────────────────────────────────────────────────
 
-// --- Message Handler ---
 async function processMessage(e: MessageEvent): Promise<void> {
     const { id, action, type, payload } = e.data;
 
     if (type === 'init') {
         try {
-            config = payload;
-            console.log('[Worker] Initialized with config:', config);
-            await loadModels();
+            config = payload as WorkerConfig;
+            console.log('[Worker] Initializing with config...');
+
+            // Load metadata first (fast, JSON fetch)
+            [metaGlobal, metaLocal, fusionConfig] = await Promise.all([
+                loadModelMeta(config.modelPaths.globalMeta),
+                loadModelMeta(config.modelPaths.localMeta),
+                loadFusionConfig(config.modelPaths.fusion),
+            ]);
+
+            // Only load the global model eagerly; local is lazy
+            await loadGlobalModel();
             self.postMessage({ type: 'init_complete' });
         } catch (err: any) {
             console.error('[Worker] Init failed:', err);
+            self.postMessage({ type: 'init_error', error: err.message });
         }
         return;
     }
 
     if (action === 'inference') {
-        const { bitmap, crops, mode } = e.data;
+        const { bitmap, crops, mode } = e.data as {
+            bitmap: ImageBitmap;
+            crops: CropRect[];
+            mode: 'default' | 'deep';
+        };
         const startTime = performance.now();
 
         try {
-            if (!config) throw new Error("Worker not initialized");
-            await loadModels();
-            if (!sessionGlobal || !sessionLocal) throw new Error("Sessions not initialized");
+            if (!config || !metaGlobal || !metaLocal || !fusionConfig) {
+                throw new Error('Worker not fully initialized');
+            }
+            if (!sessionGlobal) await loadGlobalModel();
 
-            // --- STAGE 1: Global Scan (4-Crop Grid Strategy) ---
-            // Divide image into 4 equal quadrants to preserve detail
+            // ── Stage 1: Global Scan (4-quadrant batch) ──────────────────────
             const halfW = Math.floor(bitmap.width / 2);
             const halfH = Math.floor(bitmap.height / 2);
-
             const globalCrops: CropRect[] = [
-                { x: 0, y: 0, width: halfW, height: halfH, label: 'Global_TL' },
-                { x: halfW, y: 0, width: halfW, height: halfH, label: 'Global_TR' },
-                { x: 0, y: halfH, width: halfW, height: halfH, label: 'Global_BL' },
-                { x: halfW, y: halfH, width: halfW, height: halfH, label: 'Global_BR' }
+                { x: 0,     y: 0,     width: halfW, height: halfH, label: 'Global_TL' },
+                { x: halfW, y: 0,     width: halfW, height: halfH, label: 'Global_TR' },
+                { x: 0,     y: halfH, width: halfW, height: halfH, label: 'Global_BL' },
+                { x: halfW, y: halfH, width: halfW, height: halfH, label: 'Global_BR' },
             ];
 
-            // Extract and Batch
-            const globalTensors = globalCrops.map(crop => extractCropToTensor(bitmap, crop));
-            const globalBatchInput = batchTensors(globalTensors);
-
-            // Run Global Model on Batch of 4
-            const globalBatchProbs = await runInference(sessionGlobal, globalBatchInput);
-
-            // Average the 4 probabilities
+            const globalTensors = globalCrops.map(c => extractCropToTensor(bitmap, c, metaGlobal!));
+            const globalBatch = batchTensors(globalTensors);
+            const globalBatchProbs = await runBatchInference(sessionGlobal!, metaGlobal, globalBatch);
             const globalAiProb = globalBatchProbs.reduce((a, b) => a + b, 0) / globalBatchProbs.length;
 
-            console.log(`[Worker] Global AI Prob (Avg of 4 crops): ${globalAiProb.toFixed(4)}`);
+            console.log(`[Worker] Global AI prob: ${globalAiProb.toFixed(4)}`);
 
-            // --- Fast Exit Strategy (Normal Mode Only) ---
+            // ── Stage 2: Local Scan (if uncertain or deep mode) ───────────────
             let finalAiProb = globalAiProb;
-            let resultLocalProb: number | undefined = undefined;
+            let localAiProb: number | undefined;
             let cropResults: CropResult[] = [];
 
-            // If Deep Scan OR (Normal Scan AND Global is uncertain)
-            const isUncertain = globalAiProb > 0.05 && globalAiProb < 0.95;
+            const isUncertain = globalAiProb > GATE_LOW && globalAiProb < GATE_HIGH;
 
             if (mode === 'deep' || isUncertain) {
-                console.log('[Worker] Proceeding to Local Scan...');
-
-                // --- STAGE 2: Local Scan ---
-                // Filter out the "Global" crop from the crops list if it exists, processing only sub-crops
-                // content/crops.ts generates a 'Global' crop first.
-                const localCrops = crops.filter((c: CropRect) => c.label !== 'Global');
+                const localSession = await loadLocalModel();
+                const localCrops = crops.filter(c => c.label !== 'Global');
 
                 if (localCrops.length > 0) {
                     const BATCH_SIZE = 8;
-
                     const localScores: number[] = [];
 
                     for (let i = 0; i < localCrops.length; i += BATCH_SIZE) {
                         const batchCrops = localCrops.slice(i, i + BATCH_SIZE);
-                        const tensors = batchCrops.map((crop: CropRect) => extractCropToTensor(bitmap, crop));
+                        const tensors = batchCrops.map(c => extractCropToTensor(bitmap, c, metaLocal!));
                         const batchInput = batchTensors(tensors);
-
-                        const batchProbs = await runInference(sessionLocal, batchInput);
+                        const batchProbs = await runBatchInference(localSession, metaLocal, batchInput);
 
                         batchProbs.forEach((p, idx) => {
                             localScores.push(p);
-                            cropResults.push({
-                                rect: batchCrops[idx],
-                                aiProb: p,
-                                realProb: 1 - p
-                            });
+                            cropResults.push({ rect: batchCrops[idx], aiProb: p, realProb: 1 - p });
                         });
 
-                        // Report Progress
                         const processed = Math.min(i + BATCH_SIZE, localCrops.length);
-                        self.postMessage({
-                            id,
-                            type: 'progress',
-                            processed,
-                            total: localCrops.length
-                        });
+                        self.postMessage({ id, type: 'progress', processed, total: localCrops.length });
+
+                        // Early stop for deep scan when confidence is already saturated
+                        if (mode === 'deep' && localScores.length >= EARLY_STOP_MIN_TILES) {
+                            const sorted = [...localScores].sort((a, b) => b - a);
+                            const top20Mean = sorted.slice(0, 20).reduce((a, b) => a + b, 0) / 20;
+                            if (top20Mean > EARLY_STOP_HIGH || top20Mean < EARLY_STOP_LOW) {
+                                console.log(`[Worker] Early stop at tile ${processed}: top-20 mean=${top20Mean.toFixed(4)}`);
+                                break;
+                            }
+                        }
 
                         await new Promise(r => setTimeout(r, 0));
                     }
 
-                    // --- STAGE 3: Fusion ---
-                    // Strategy: Average of Top 3 Local Scores
-                    localScores.sort((a, b) => b - a);
-                    let localAiProb = 0;
-                    if (localScores.length >= 3) {
-                        const top3 = localScores.slice(0, 3);
-                        localAiProb = top3.reduce((a, b) => a + b, 0) / 3;
-                    } else if (localScores.length > 0) {
-                        localAiProb = localScores[0];
-                    }
-
-                    // Weighted Fusion: 25% Global, 75% Local
-                    finalAiProb = (0.25 * globalAiProb) + (0.75 * localAiProb);
-                    resultLocalProb = localAiProb;
-
-                    // Add global result for UI visualization if needed
-                    // User requested to hide global crops.
-                    // If we wanted to, we could add a "dummy" global crop covering 100% 
-                    // or just leave it out. Leaving it out.
-
+                    // ── Stage 3: Fusion ───────────────────────────────────────
+                    const features = buildFusionFeatures(globalAiProb, localScores, GATE_HIGH);
+                    finalAiProb = computeFusedScore(features, fusionConfig!);
+                    localAiProb = features.localTop3Mean;
                 }
             } else {
-                console.log('[Worker] Fast Exit triggered.');
-                // User requested to hide global crops.
-                // cropResults is empty here, which is fine.
+                console.log('[Worker] Fast exit: global confidence outside uncertain zone');
             }
 
-
-            const isAI = finalAiProb > 0.5;
+            const isAI = finalAiProb > fusionConfig.threshold;
             const confidence = Math.round(isAI ? finalAiProb * 100 : (1 - finalAiProb) * 100);
             const duration = performance.now() - startTime;
 
@@ -291,12 +260,15 @@ async function processMessage(e: MessageEvent): Promise<void> {
                 cropResults,
                 totalCrops: crops.length,
                 globalProbability: globalAiProb,
-                localProbability: resultLocalProb
+                localProbability: localAiProb,
+                calibratedScore: finalAiProb,
+                uncertaintyState: (globalAiProb > GATE_LOW && globalAiProb < GATE_HIGH)
+                    ? 'uncertain'
+                    : 'confident',
             };
 
             self.postMessage({ id, type: 'result', data: result });
             bitmap.close();
-
         } catch (error: any) {
             console.error('[Worker] Inference error:', error);
             self.postMessage({ id, type: 'error', error: error.message });
@@ -308,7 +280,5 @@ async function processMessage(e: MessageEvent): Promise<void> {
 self.onmessage = (e: MessageEvent) => {
     inferenceQueue = inferenceQueue
         .then(() => processMessage(e))
-        .catch((err) => {
-            console.error('[Worker] Queue failure:', err);
-        });
+        .catch(err => console.error('[Worker] Queue failure:', err));
 };

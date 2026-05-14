@@ -3,7 +3,7 @@ export interface CropRect {
     y: number;
     width: number;
     height: number;
-    label?: string; // e.g. "Center", "Top-Left", "Global"
+    label?: string;
 }
 
 export interface CropResult {
@@ -24,7 +24,11 @@ export interface InferenceResult {
     heatmapWidth?: number;
     heatmapHeight?: number;
 
-    // Dual-Model Specifics
+    // Dual-model specifics
     globalProbability?: number;
     localProbability?: number;
+
+    // V2: calibration and uncertainty
+    calibratedScore?: number;
+    uncertaintyState?: 'confident' | 'uncertain' | 'abstain';
 }

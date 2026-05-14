@@ -43,6 +43,9 @@
             "resources": [
                 "models/model_global_quantized.onnx",
                 "models/model_local_quantized.onnx",
+                "models/model_global_meta.json",
+                "models/model_local_meta.json",
+                "models/fusion_v2.json",
                 "wasm/ort-wasm-simd.wasm",
                 "wasm/ort-wasm.wasm",
                 "wasm/ort-wasm-threaded.wasm",

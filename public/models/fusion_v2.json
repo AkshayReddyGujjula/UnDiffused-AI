@@ -1,0 +1,16 @@
+{
+  "version": "2.0",
+  "type": "logistic_regression",
+  "features": [
+    "globalAiProb",
+    "localTop1Mean",
+    "localTop3Mean",
+    "localTop5Mean",
+    "localVariance",
+    "localFracAboveHigh"
+  ],
+  "weights": [0.30, 0.50, 0.40, 0.30, 0.20, 0.50],
+  "bias": -0.10,
+  "temperature": 1.0,
+  "threshold": 0.50
+}

@@ -24,7 +24,8 @@ let session: ort.InferenceSession | null = null;
 async function initSession(): Promise<ort.InferenceSession> {
     if (session) return session;
 
-    const modelUrl = chrome.runtime.getURL('models/model_quantized.onnx');
+    // V2: updated to reference the active global model (model_quantized.onnx was the legacy single-model path)
+    const modelUrl = chrome.runtime.getURL('models/model_global_quantized.onnx');
     session = await ort.InferenceSession.create(modelUrl, {
         executionProviders: ['wasm'],
     });

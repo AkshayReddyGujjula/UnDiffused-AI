@@ -1,227 +1,189 @@
 import { CropRect } from './types';
 
 const PATCH_SIZE = 224;
+// 50% overlap stride for deep scan — catches boundary artifacts missed by non-overlapping tiles
+const DEEP_STRIDE = Math.floor(PATCH_SIZE / 2); // 112
+const DEEP_MAX_TILES = 100;
 
-/**
- * Generates the default set of crops:
- * 1. Global (resized)
- * 2. Center
- * 3. Four Corners
- */
 export function generateDefaultCrops(width: number, height: number): CropRect[] {
     const crops: CropRect[] = [];
     const cropW = Math.min(PATCH_SIZE, width);
     const cropH = Math.min(PATCH_SIZE, height);
 
-    // 1. Global (conceptually matches the whole image, preprocessor will resize it)
-    crops.push({
-        x: 0,
-        y: 0,
-        width: width,
-        height: height,
-        label: 'Global'
-    });
+    crops.push({ x: 0, y: 0, width, height, label: 'Global' });
 
-    // If image is smaller than patch size, just use Global (it will be upscaled/padded by preprocessor)
-    if (width <= PATCH_SIZE && height <= PATCH_SIZE) {
-        return crops;
-    }
+    if (width <= PATCH_SIZE && height <= PATCH_SIZE) return crops;
 
-    // 2. Center Crop
     const centerX = Math.max(0, Math.floor((width - PATCH_SIZE) / 2));
     const centerY = Math.max(0, Math.floor((height - PATCH_SIZE) / 2));
-    crops.push({
-        x: centerX,
-        y: centerY,
-        width: cropW,
-        height: cropH,
-        label: 'Center'
-    });
+    crops.push({ x: centerX, y: centerY, width: cropW, height: cropH, label: 'Center' });
 
-    // 3. Four Corners
-    // Top-Left
     crops.push({ x: 0, y: 0, width: cropW, height: cropH, label: 'Top-Left' });
-
-    // Top-Right
-    crops.push({
-        x: Math.max(0, width - PATCH_SIZE),
-        y: 0,
-        width: cropW,
-        height: cropH,
-        label: 'Top-Right'
-    });
-
-    // Bottom-Left
-    crops.push({
-        x: 0,
-        y: Math.max(0, height - PATCH_SIZE),
-        width: cropW,
-        height: cropH,
-        label: 'Bottom-Left'
-    });
-
-    // Bottom-Right
+    crops.push({ x: Math.max(0, width - PATCH_SIZE), y: 0, width: cropW, height: cropH, label: 'Top-Right' });
+    crops.push({ x: 0, y: Math.max(0, height - PATCH_SIZE), width: cropW, height: cropH, label: 'Bottom-Left' });
     crops.push({
         x: Math.max(0, width - PATCH_SIZE),
         y: Math.max(0, height - PATCH_SIZE),
         width: cropW,
         height: cropH,
-        label: 'Bottom-Right'
+        label: 'Bottom-Right',
     });
 
     return crops;
 }
 
-/**
- * Generates a 3x3 Grid of crops (9 total) for standard inference.
- * Positions: TL, TC, TR, ML, Center, MR, BL, BC, BR
- */
 export function generateGridCrops(width: number, height: number): CropRect[] {
-    const crops: CropRect[] = [];
-    const size = PATCH_SIZE; // 224
-
-    // If image is smaller than patch, return single global crop
+    const size = PATCH_SIZE;
     if (width <= size && height <= size) {
         return [{ x: 0, y: 0, width, height, label: 'Global' }];
     }
 
-    // Grid Coordinates
-    // X Axis: Left(0), Center((W-224)/2), Right(W-224)
     const xLeft = 0;
     const xCenter = Math.max(0, Math.floor((width - size) / 2));
     const xRight = Math.max(0, width - size);
-
-    // Y Axis: Top(0), Center((H-224)/2), Bottom(H-224)
     const yTop = 0;
     const yCenter = Math.max(0, Math.floor((height - size) / 2));
     const yBottom = Math.max(0, height - size);
 
-    // Top Row
-    crops.push({ x: xLeft, y: yTop, width: size, height: size, label: 'Top-Left' });
-    crops.push({ x: xCenter, y: yTop, width: size, height: size, label: 'Top-Center' });
-    crops.push({ x: xRight, y: yTop, width: size, height: size, label: 'Top-Right' });
-
-    // Middle Row
-    crops.push({ x: xLeft, y: yCenter, width: size, height: size, label: 'Mid-Left' });
-    crops.push({ x: xCenter, y: yCenter, width: size, height: size, label: 'Center' });
-    crops.push({ x: xRight, y: yCenter, width: size, height: size, label: 'Mid-Right' });
-
-    // Bottom Row
-    crops.push({ x: xLeft, y: yBottom, width: size, height: size, label: 'Bottom-Left' });
-    crops.push({ x: xCenter, y: yBottom, width: size, height: size, label: 'Bottom-Center' });
-    crops.push({ x: xRight, y: yBottom, width: size, height: size, label: 'Bottom-Right' });
-
-    return crops;
+    return [
+        { x: xLeft,   y: yTop,    width: size, height: size, label: 'Top-Left' },
+        { x: xCenter, y: yTop,    width: size, height: size, label: 'Top-Center' },
+        { x: xRight,  y: yTop,    width: size, height: size, label: 'Top-Right' },
+        { x: xLeft,   y: yCenter, width: size, height: size, label: 'Mid-Left' },
+        { x: xCenter, y: yCenter, width: size, height: size, label: 'Center' },
+        { x: xRight,  y: yCenter, width: size, height: size, label: 'Mid-Right' },
+        { x: xLeft,   y: yBottom, width: size, height: size, label: 'Bottom-Left' },
+        { x: xCenter, y: yBottom, width: size, height: size, label: 'Bottom-Center' },
+        { x: xRight,  y: yBottom, width: size, height: size, label: 'Bottom-Right' },
+    ];
 }
 
 /**
- * Generates a grid of non-overlapping tiles for Deep Scan.
+ * Deep scan: overlapping tiles with DEEP_STRIDE (50% overlap) capped at DEEP_MAX_TILES.
+ * Overlapping coverage catches artifacts near tile boundaries that non-overlapping grids miss.
+ * When the tile count exceeds the cap, tiles are ranked by estimated saliency (edge density)
+ * so the most informative regions are processed first.
  */
-export function generateDeepScanTiles(width: number, height: number): CropRect[] {
-    const crops: CropRect[] = [];
-    const seen = new Set<string>();
-    const cropW = Math.min(PATCH_SIZE, width);
-    const cropH = Math.min(PATCH_SIZE, height);
-    const tilesX = Math.max(1, Math.ceil(width / PATCH_SIZE));
-    const tilesY = Math.max(1, Math.ceil(height / PATCH_SIZE));
+export function generateDeepScanTiles(
+    width: number,
+    height: number,
+    qualityMap?: Float32Array
+): CropRect[] {
+    const size = PATCH_SIZE;
+    const cropW = Math.min(size, width);
+    const cropH = Math.min(size, height);
 
-    for (let y = 0; y < tilesY; y++) {
-        for (let x = 0; x < tilesX; x++) {
-            const tileX = Math.min(x * PATCH_SIZE, Math.max(0, width - cropW));
-            const tileY = Math.min(y * PATCH_SIZE, Math.max(0, height - cropH));
-            const key = `${tileX}:${tileY}:${cropW}:${cropH}`;
+    const seen = new Set<string>();
+    const allTiles: CropRect[] = [];
+
+    for (let y = 0; y <= height - cropH; y += DEEP_STRIDE) {
+        for (let x = 0; x <= width - cropW; x += DEEP_STRIDE) {
+            const key = `${x}:${y}`;
             if (seen.has(key)) continue;
             seen.add(key);
-
-            crops.push({
-                x: tileX,
-                y: tileY,
-                width: cropW,
-                height: cropH,
-                label: `Tile ${x},${y}`
-            });
+            allTiles.push({ x, y, width: cropW, height: cropH, label: `Tile ${x},${y}` });
         }
     }
 
-    // Add remainders if significant? For now, implementing basic grid as requested.
-    // "Ignore remainders for now (OK to miss a thin border)."
+    // Always include the right/bottom edge strips so we don't miss the image boundary
+    for (let y = 0; y <= height - cropH; y += DEEP_STRIDE) {
+        const x = Math.max(0, width - cropW);
+        const key = `${x}:${y}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            allTiles.push({ x, y, width: cropW, height: cropH, label: `Tile ${x},${y}` });
+        }
+    }
+    for (let x = 0; x <= width - cropW; x += DEEP_STRIDE) {
+        const y = Math.max(0, height - cropH);
+        const key = `${x}:${y}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            allTiles.push({ x, y, width: cropW, height: cropH, label: `Tile ${x},${y}` });
+        }
+    }
 
-    return crops;
+    if (allTiles.length <= DEEP_MAX_TILES) return allTiles;
+
+    // Rank by saliency score when capping — prioritise high-detail regions
+    if (qualityMap) {
+        const scored = allTiles.map(tile => ({
+            tile,
+            score: sampleQuality(tile, qualityMap, width),
+        }));
+        scored.sort((a, b) => b.score - a.score);
+        return scored.slice(0, DEEP_MAX_TILES).map(s => s.tile);
+    }
+
+    // No quality map: distribute evenly across the image rather than truncating from top-left
+    const step = Math.ceil(allTiles.length / DEEP_MAX_TILES);
+    return allTiles.filter((_, i) => i % step === 0).slice(0, DEEP_MAX_TILES);
+}
+
+function sampleQuality(tile: CropRect, qualityMap: Float32Array, imageWidth: number): number {
+    const sampleStep = 16;
+    let total = 0;
+    let count = 0;
+    for (let dy = 0; dy < tile.height; dy += sampleStep) {
+        for (let dx = 0; dx < tile.width; dx += sampleStep) {
+            const px = tile.x + dx;
+            const py = tile.y + dy;
+            total += qualityMap[py * imageWidth + px] ?? 0;
+            count++;
+        }
+    }
+    return count > 0 ? total / count : 0;
 }
 
 /**
- * Adaptive Cropping Logic
- * 1. Sliding Window (224x224, stride 56)
- * 2. Rank by average quality score
- * 3. NMS (Overlap Threshold 30%)
- * 4. Fallback to center crops
+ * Adaptive saliency-ranked cropping for normal scan.
+ * Uses sliding window + NMS; capped at numCrops (default 10).
  */
 export function getAdaptiveCrops(
     width: number,
     height: number,
     qualityMap: Float32Array,
-    numCrops = 9
+    numCrops = 10
 ): CropRect[] {
-    const crops: CropRect[] = [];
-    const size = PATCH_SIZE; // 224
+    const size = PATCH_SIZE;
 
-    // If image is small, return global
     if (width <= size && height <= size) {
         return [{ x: 0, y: 0, width, height, label: 'Global' }];
     }
 
     const stride = 56;
-    const candidates: { x: number, y: number, score: number }[] = [];
+    const candidates: { x: number; y: number; score: number }[] = [];
 
-    // 1. Sliding Window & Scoring
     for (let y = 0; y <= height - size; y += stride) {
         for (let x = 0; x <= width - size; x += stride) {
-            let totalScore = 0;
-            // Compute average score for this window from qualityMap
-            // Optimization: Compute using integral image if strictly needed, 
-            // but for 224x224 window with stride, straightforward sampling might be heavy (224*224*steps).
-            // Actually, we can just sample a grid of points inside the window to approximate the score 
-            // instead of every single pixel, to save time.
-            // Let's sample every 8th pixel. 224/8 = 28x28 = 784 samples per window.
-
-            const sampleStep = 8;
+            let total = 0;
             let samples = 0;
+            const sampleStep = 8;
 
             for (let wy = 0; wy < size; wy += sampleStep) {
-                const mapY = y + wy;
-                const rowOffset = mapY * width;
+                const rowOffset = (y + wy) * width;
                 for (let wx = 0; wx < size; wx += sampleStep) {
-                    const mapX = x + wx;
-                    totalScore += qualityMap[rowOffset + mapX];
+                    total += qualityMap[rowOffset + x + wx];
                     samples++;
                 }
             }
-
-            const avgScore = totalScore / samples;
-            candidates.push({ x, y, score: avgScore });
+            candidates.push({ x, y, score: total / samples });
         }
     }
 
-    // 2. Ranking
     candidates.sort((a, b) => b.score - a.score);
 
-    // 3. Selection (NMS)
-    const selected: { x: number, y: number, score: number }[] = [];
+    const selected: { x: number; y: number; score: number }[] = [];
 
-    // Helper: Compute IoU (Intersection over Union) - actually we just need Overlap % of the candidate
-    // Requirement: "If a candidate overlaps >30% with an already selected crop"
-    const isOverlapping = (cx: number, cy: number) => {
+    const isOverlapping = (cx: number, cy: number): boolean => {
         for (const s of selected) {
             const ix = Math.max(cx, s.x);
             const iy = Math.max(cy, s.y);
             const ax = Math.min(cx + size, s.x + size);
             const ay = Math.min(cy + size, s.y + size);
-
             if (ix < ax && iy < ay) {
                 const intersection = (ax - ix) * (ay - iy);
-                const area = size * size;
-                // Overlap ratio relative to the crop area (since all are 224x224)
-                if (intersection / area > 0.3) return true;
+                if (intersection / (size * size) > 0.3) return true;
             }
         }
         return false;
@@ -229,39 +191,24 @@ export function getAdaptiveCrops(
 
     for (const cand of candidates) {
         if (selected.length >= numCrops) break;
-        if (!isOverlapping(cand.x, cand.y)) {
-            selected.push(cand);
-        }
+        if (!isOverlapping(cand.x, cand.y)) selected.push(cand);
     }
 
-    // 4. Convert to CropRects
-    selected.forEach((s, i) => {
-        crops.push({
-            x: s.x,
-            y: s.y,
-            width: size,
-            height: size,
-            label: `Adaptive-${i + 1} (${s.score.toFixed(2)})`
-        });
-    });
+    const crops: CropRect[] = selected.map((s, i) => ({
+        x: s.x,
+        y: s.y,
+        width: size,
+        height: size,
+        label: `Adaptive-${i + 1} (${s.score.toFixed(2)})`,
+    }));
 
-    // 5. Fallback if not enough crops
+    // Fallback: fill remaining slots from the fixed grid
     if (crops.length < numCrops) {
-        // Use center/grid crops to fill up
         const fallback = generateGridCrops(width, height);
-        // Filter out fallbacks that overlap with already selected adaptive crops? 
-        // Or just blindly add them to ensure we have inputs. 
-        // The prompt says: "fill the remaining slots with standard center-crop positions"
-        // Let's just take unique ones from grid until filled.
-
         for (const fc of fallback) {
             if (crops.length >= numCrops) break;
-
-            // simple check to avoid exact duplicates
             const isDup = crops.some(c => Math.abs(c.x - fc.x) < 10 && Math.abs(c.y - fc.y) < 10);
-            if (!isDup) {
-                crops.push({ ...fc, label: `Fallback-${fc.label}` });
-            }
+            if (!isDup) crops.push({ ...fc, label: `Fallback-${fc.label}` });
         }
     }
 

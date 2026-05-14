@@ -4,6 +4,13 @@ import { crx } from '@crxjs/vite-plugin';
 import manifest from './manifest.json';
 
 export default defineConfig({
+  test: {
+    environment: 'node',
+    globals: true,
+    include: ['src/**/__tests__/**/*.test.ts'],
+    // Mock browser/chrome globals not available in Node
+    setupFiles: [],
+  },
   plugins: [
     react(),
     crx({ manifest }),
