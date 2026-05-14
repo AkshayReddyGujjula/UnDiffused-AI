@@ -26,7 +26,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.tsx-loader-tB9ZLNEt.js"
+        "assets/index.tsx-loader-JSXj5kXH.js"
       ],
       "matches": [
         "https://*/*",
@@ -47,6 +47,9 @@
       "resources": [
         "models/model_global_quantized.onnx",
         "models/model_local_quantized.onnx",
+        "models/model_global_meta.json",
+        "models/model_local_meta.json",
+        "models/fusion_v2.json",
         "wasm/ort-wasm-simd.wasm",
         "wasm/ort-wasm.wasm",
         "wasm/ort-wasm-threaded.wasm",
@@ -61,7 +64,7 @@
       ],
       "resources": [
         "assets/GlassCard-BMBPpFOK.js",
-        "assets/index.tsx-0KmtE0d7.js"
+        "assets/index.tsx-BHywGp7V.js"
       ],
       "use_dynamic_url": false
     }
