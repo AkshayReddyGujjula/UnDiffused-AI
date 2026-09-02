@@ -21,13 +21,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# torch.onnx logs progress with emoji, which crashes on a Windows cp1252
+# console. Force UTF-8 on our streams before importing torch so the export
+# cannot die on a status message.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 import numpy as np
 import torch
 
-import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from finetune_gpu import Detector, IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 
@@ -55,15 +64,45 @@ def main():
     fp32_path = args.out_dir / "{}.onnx".format(args.name)
 
     dummy = torch.randn(1, 3, 224, 224)
-    torch.onnx.export(
-        model, (dummy,), str(fp32_path),
-        input_names=["pixel_values"], output_names=["logits"],
-        dynamic_axes={"pixel_values": {0: "batch_size"},
-                      "logits": {0: "batch_size"}},
-        opset_version=args.opset, do_constant_folding=True,
-    )
-    print("exported {} ({:.1f} MB)".format(
-        fp32_path.name, fp32_path.stat().st_size / 1e6))
+
+    # Prefer the legacy TorchScript exporter. The dynamo exporter emits a Resize
+    # node the ONNX version converter has no opset-17 adapter for, which breaks
+    # dynamic quantization, and it spills weights into a sidecar .onnx.data
+    # file. The extension fetches exactly one URL, so a single self-contained
+    # file is a hard requirement here rather than a preference.
+    try:
+        torch.onnx.export(
+            model, (dummy,), str(fp32_path),
+            input_names=["pixel_values"], output_names=["logits"],
+            dynamic_axes={"pixel_values": {0: "batch_size"},
+                          "logits": {0: "batch_size"}},
+            opset_version=args.opset, do_constant_folding=True,
+            dynamo=False,
+        )
+        exporter = "torchscript"
+    except (TypeError, RuntimeError) as exc:
+        print("legacy exporter unavailable ({}); using dynamo".format(
+            type(exc).__name__))
+        torch.onnx.export(
+            model, (dummy,), str(fp32_path),
+            input_names=["pixel_values"], output_names=["logits"],
+            dynamic_axes={"pixel_values": {0: "batch_size"},
+                          "logits": {0: "batch_size"}},
+            opset_version=args.opset, do_constant_folding=True,
+        )
+        exporter = "dynamo"
+
+    # Fold any external weight data back into the single .onnx file.
+    sidecar = Path(str(fp32_path) + ".data")
+    if sidecar.exists():
+        import onnx
+        m = onnx.load(str(fp32_path))
+        onnx.save_model(m, str(fp32_path), save_as_external_data=False)
+        sidecar.unlink(missing_ok=True)
+        print("folded external weights back into a single file")
+
+    print("exported {} ({:.1f} MB, {} exporter)".format(
+        fp32_path.name, fp32_path.stat().st_size / 1e6, exporter))
 
     import onnxruntime as ort
     sess = ort.InferenceSession(str(fp32_path), providers=["CPUExecutionProvider"])
@@ -108,15 +147,28 @@ def main():
     }
 
     if args.quantize:
-        from onnxruntime.quantization import quantize_dynamic, QuantType
-        q_path = args.out_dir / "{}_int8.onnx".format(args.name)
-        quantize_dynamic(str(fp32_path), str(q_path), weight_type=QuantType.QInt8)
-        q_sess = ort.InferenceSession(str(q_path),
-                                      providers=["CPUExecutionProvider"])
-        q_out = np.asarray(q_sess.run(
-            [q_sess.get_outputs()[0].name],
-            {q_sess.get_inputs()[0].name: probe.numpy()})[0]).reshape(-1)
-        q_div = float(np.max(np.abs(torch_out - q_out)))
+        # Quantization is a nice-to-have: it shrinks the download roughly 4x.
+        # If it fails, the fp32 model is still perfectly shippable, so a failure
+        # here is recorded and moved past rather than aborting the export.
+        try:
+            from onnxruntime.quantization import quantize_dynamic, QuantType
+            q_path = args.out_dir / "{}_int8.onnx".format(args.name)
+            quantize_dynamic(str(fp32_path), str(q_path),
+                             weight_type=QuantType.QInt8)
+            q_sess = ort.InferenceSession(str(q_path),
+                                          providers=["CPUExecutionProvider"])
+            q_out = np.asarray(q_sess.run(
+                [q_sess.get_outputs()[0].name],
+                {q_sess.get_inputs()[0].name: probe.numpy()})[0]).reshape(-1)
+            q_div = float(np.max(np.abs(torch_out - q_out)))
+        except Exception as exc:
+            print("quantization failed ({}: {}); keeping fp32".format(
+                type(exc).__name__, str(exc)[:120]))
+            meta["quantized"] = {"failed": True, "error": str(exc)[:300],
+                                 "note": "fp32 export is unaffected and shippable."}
+            q_path = None
+
+    if args.quantize and q_path is not None:
         meta["quantized"] = {
             "file": q_path.name,
             "size_mb": round(q_path.stat().st_size / 1e6, 2),

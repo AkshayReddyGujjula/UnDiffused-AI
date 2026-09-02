@@ -276,7 +276,11 @@ def main():
 
         if val_auc > best_auc:
             best_auc = val_auc
-            torch.save({"model": model.state_dict(), "args": vars(args),
+            # Store only plain types. Path objects pickle as WindowsPath, which
+            # torch.load refuses under its weights_only default since 2.6.
+            safe_args = {k: (str(v) if isinstance(v, Path) else v)
+                         for k, v in vars(args).items()}
+            torch.save({"model": model.state_dict(), "args": safe_args,
                         "epoch": epoch, "val_auroc": val_auc},
                        args.out / "detector_best.pt")
             print("    saved new best")
