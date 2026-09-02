@@ -1,0 +1,7 @@
+  68/4000 pairs  (46s elapsed, offset 200100)
+  134/4000 pairs  (101s elapsed, offset 200200)
+C:\Users\aksha\AppData\Roaming\Python\Python314\site-packages\PIL\Image.py:1034: UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images
+  warnings.warn(
+  196/4000 pairs  (154s elapsed, offset 200300)
+  253/4000 pairs  (206s elapsed, offset 200400)
+  307/4000 pairs  (267s elapsed, offset 200500)
