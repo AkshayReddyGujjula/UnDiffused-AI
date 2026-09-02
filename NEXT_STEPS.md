@@ -5,7 +5,7 @@ whether that resumption is Claude after a usage-limit reset or a human reading
 this in the morning.
 
 **Branch:** `stage1-baseline` (local only — do not push without asking)
-**Last updated:** 2026-09-02 21:00 UTC
+**Last updated:** 2026-09-02 21:25 UTC
 
 ## Locked direction (agreed with Akshay before he slept)
 
@@ -26,7 +26,7 @@ this in the morning.
 | 3 — data (scaled) | not started | |
 | 4 — DINOv2 feature extraction (scaled) | not started | |
 | 5 — head + calibration + abstention band | not started | |
-| worker.ts fix + contract assert | not started | |
+| worker.ts fix + contract assert | **DONE** | `src/content/inference/contract.ts`, `tests/parse.test.mjs` (12 passing), `npm run build` clean |
 
 ## Stage 1 headline (do not re-derive — it is settled)
 
@@ -39,10 +39,12 @@ consistent with noise). The parsing bug is real but repairing it changes
 
 ## Immediate next actions, in order
 
-1. **Fix `src/content/inference/worker.ts`** — correct the N-class softmax
-   parse, and add a load-time assertion on tensor names / class count /
-   normalisation constants that throws rather than guessing. Keep the verdict
-   suppressed.
+1. ~~Fix `worker.ts`~~ — **DONE.** Parsing extracted to `contract.ts` as pure
+   `logitsToDistributions` (strides by class count), contract asserted at load
+   and on first output shape, `aiClassIndex: null` propagates to a
+   `model_unavailable` status so the UI shows "No model verdict" instead of a
+   fabricated percentage. `npm test` runs 12 regression tests via Node's built-in
+   runner (no new deps).
 2. **Stage 2 harness** — extend `scripts/bench/` with:
    generator-family holdout splits; laundering augmentations at eval time (JPEG
    quality ladder, resize chains, screenshot re-capture); ECE alongside AUROC

@@ -1,5 +1,13 @@
 import * as ort from 'onnxruntime-web';
 import { CropRect, InferenceResult, CropResult } from './types';
+import {
+    MODEL_CONTRACTS,
+    MODEL_CALIBRATION,
+    ModelContract,
+    assertModelContract,
+    logitsToDistributions,
+    toAiProbability,
+} from './contract';
 
 console.log('[Worker] Worker script loaded and starting...');
 
@@ -17,19 +25,6 @@ let sessionGlobal: ort.InferenceSession | null = null;
 let sessionLocal: ort.InferenceSession | null = null;
 let inferenceQueue: Promise<void> = Promise.resolve();
 
-
-// --- Helper: Softmax ---
-function softmax(logits: number[]): number[] {
-    const max = Math.max(...logits);
-    const exps = logits.map(x => Math.exp(x - max));
-    const sum = exps.reduce((a, b) => a + b, 0);
-    return exps.map(x => x / sum);
-}
-
-// --- Helper: Sigmoid ---
-function sigmoid(logit: number): number {
-    return 1 / (1 + Math.exp(-logit));
-}
 
 // --- Helper: Batch Tensors ---
 function batchTensors(tensors: ort.Tensor[]): ort.Tensor {
@@ -100,9 +95,22 @@ async function loadModels() {
             ort.InferenceSession.create(config.modelPaths.local, options)
         ]);
 
+        // Assert the tensor contract before anything is allowed to run. A
+        // mismatch here is a hard failure: the alternative is what shipped
+        // previously, which was to guess and render the guess as a percentage.
+        assertModelContract(global, MODEL_CONTRACTS.global);
+        assertModelContract(local, MODEL_CONTRACTS.local);
+
         sessionGlobal = global;
         sessionLocal = local;
-        console.log('[Worker] Both models loaded successfully');
+        console.log('[Worker] Both models loaded and contracts verified');
+        if (!MODEL_CALIBRATION.calibrated) {
+            console.warn(
+                '[Worker] Models are UNCALIBRATED. Measured AUROC ' +
+                `${MODEL_CALIBRATION.measuredAuroc} on ${MODEL_CALIBRATION.benchmark}. ` +
+                'No verdict will be produced. ' + MODEL_CALIBRATION.note
+            );
+        }
     } catch (e) {
         console.error('[Worker] Model load failed', e);
         throw e;
@@ -111,46 +119,25 @@ async function loadModels() {
 
 // --- Inference Helpers ---
 
-async function runInference(session: ort.InferenceSession, inputTensor: ort.Tensor): Promise<number[]> {
-    const inputName = session.inputNames[0];
-    const outputName = session.outputNames[0]; // Assuming single output for simplicity
-    const results = await session.run({ [inputName]: inputTensor });
-    const outputTensor = results[outputName];
-
-    // Handle both [Batch, 1] (Sigmoid) and [Batch, 2] (Softmax) output shapes
-    const outputData = outputTensor.data as Float32Array;
-    const dims = outputTensor.dims;
-    const batchSize = dims[0];
-    const classCount = dims[1] || 1;
-
-    const probabilities: number[] = [];
-
-    for (let i = 0; i < batchSize; i++) {
-        if (classCount === 2) {
-            const logits = Array.from(outputData.slice(i * 2, (i + 1) * 2));
-            const probs = softmax(logits);
-            probabilities.push(probs[0]); // Class 0 is usually AI? Wait, usually Class 1 is target.
-            // Convention check: Usually Index 0 = Real, Index 1 = Fake/AI? 
-            // Or Index 0 = AI, Index 1 = Real? 
-            // In standard "UniversalFakeDetect", 0=Real, 1=Fake.
-            // Let's assume standard: 1 = AI. 
-            // WAIT - In previous worker code: `aiProb = probs[0]`. 
-            // That implies the user trained it such that 0 is AI. 
-            // I will stick to the previous code's convention: Index 0 is AI.
-        } else {
-            const raw = outputData[i];
-            // If already probability
-            const val = raw >= 0 && raw <= 1 ? raw : sigmoid(raw);
-            probabilities.push(val);
-            // If binary, is 1 AI or 0 AI? 
-            // Usually 1 is positive class (AI). 
-            // If previous code used probs[0] as AI, then for binary, it requires testing.
-            // Let's assume 1=AI for binary models unless specified.
-        }
-    }
-    return probabilities;
+/**
+ * Run a batch and return the full per-image class probability distribution.
+ *
+ * Returns distributions rather than a single "AI probability" on purpose. The
+ * previous version collapsed the output to one number inside this function and
+ * had to decide which index meant AI in order to do so -- a decision it was not
+ * equipped to make, made wrongly, and buried in a comment. Collapsing is now
+ * the caller's problem, and the caller must consult the model contract.
+ */
+async function runInference(
+    session: ort.InferenceSession,
+    inputTensor: ort.Tensor,
+    contract: ModelContract
+): Promise<number[][]> {
+    const results = await session.run({ [contract.inputName]: inputTensor });
+    const outputTensor = results[contract.outputName];
+    return logitsToDistributions(
+        outputTensor.data as Float32Array, outputTensor.dims, contract);
 }
-
 
 // --- Message Handler ---
 async function processMessage(e: MessageEvent): Promise<void> {
@@ -194,20 +181,35 @@ async function processMessage(e: MessageEvent): Promise<void> {
             const globalBatchInput = batchTensors(globalTensors);
 
             // Run Global Model on Batch of 4
-            const globalBatchProbs = await runInference(sessionGlobal, globalBatchInput);
+            const globalDists = await runInference(
+                sessionGlobal, globalBatchInput, MODEL_CONTRACTS.global);
 
-            // Average the 4 probabilities
-            const globalAiProb = globalBatchProbs.reduce((a, b) => a + b, 0) / globalBatchProbs.length;
+            // Collapse each quadrant to an AI probability, if the contract
+            // establishes one. It currently does not, so this is all nulls.
+            const globalPerCrop = globalDists.map(
+                d => toAiProbability(d, MODEL_CONTRACTS.global));
+            const globalUsable = globalPerCrop.filter(
+                (p): p is number => p !== null);
 
-            console.log(`[Worker] Global AI Prob (Avg of 4 crops): ${globalAiProb.toFixed(4)}`);
+            const globalAiProb = globalUsable.length === globalPerCrop.length
+                ? globalUsable.reduce((a, b) => a + b, 0) / globalUsable.length
+                : null;
+
+            console.log('[Worker] Global distributions:', globalDists,
+                '-> AI prob:', globalAiProb === null ? 'N/A (no AI class established)'
+                    : globalAiProb.toFixed(4));
 
             // --- Fast Exit Strategy (Normal Mode Only) ---
-            let finalAiProb = globalAiProb;
+            let finalAiProb: number | null = globalAiProb;
             let resultLocalProb: number | undefined = undefined;
             let cropResults: CropResult[] = [];
 
-            // If Deep Scan OR (Normal Scan AND Global is uncertain)
-            const isUncertain = globalAiProb > 0.05 && globalAiProb < 0.95;
+            // If Deep Scan OR (Normal Scan AND Global is uncertain).
+            // With no AI class established the global score is null, so the
+            // gate cannot be evaluated and we always continue to the local
+            // stage rather than short-circuiting on an unknown.
+            const isUncertain = globalAiProb === null
+                || (globalAiProb > 0.05 && globalAiProb < 0.95);
 
             if (mode === 'deep' || isUncertain) {
                 console.log('[Worker] Proceeding to Local Scan...');
@@ -227,14 +229,17 @@ async function processMessage(e: MessageEvent): Promise<void> {
                         const tensors = batchCrops.map((crop: CropRect) => extractCropToTensor(bitmap, crop));
                         const batchInput = batchTensors(tensors);
 
-                        const batchProbs = await runInference(sessionLocal, batchInput);
+                        const batchDists = await runInference(
+                            sessionLocal, batchInput, MODEL_CONTRACTS.local);
 
-                        batchProbs.forEach((p, idx) => {
-                            localScores.push(p);
+                        batchDists.forEach((dist, idx) => {
+                            const p = toAiProbability(dist, MODEL_CONTRACTS.local);
+                            if (p !== null) localScores.push(p);
                             cropResults.push({
                                 rect: batchCrops[idx],
                                 aiProb: p,
-                                realProb: 1 - p
+                                realProb: p === null ? null : 1 - p,
+                                distribution: dist
                             });
                         });
 
@@ -261,9 +266,16 @@ async function processMessage(e: MessageEvent): Promise<void> {
                         localAiProb = localScores[0];
                     }
 
-                    // Weighted Fusion: 25% Global, 75% Local
-                    finalAiProb = (0.25 * globalAiProb) + (0.75 * localAiProb);
-                    resultLocalProb = localAiProb;
+                    // Weighted Fusion: 25% Global, 75% Local.
+                    // Only meaningful when both stages produced a real number;
+                    // with no AI class established both are null and so is the
+                    // fusion. We do not substitute a default.
+                    if (globalAiProb !== null && localScores.length > 0) {
+                        finalAiProb = (0.25 * globalAiProb) + (0.75 * localAiProb);
+                        resultLocalProb = localAiProb;
+                    } else {
+                        finalAiProb = null;
+                    }
 
                     // Add global result for UI visualization if needed
                     // User requested to hide global crops.
@@ -278,20 +290,38 @@ async function processMessage(e: MessageEvent): Promise<void> {
             }
 
 
-            const isAI = finalAiProb > 0.5;
-            const confidence = Math.round(isAI ? finalAiProb * 100 : (1 - finalAiProb) * 100);
             const duration = performance.now() - startTime;
 
+            // A verdict requires two things: a usable probability, and models
+            // that have been measured to carry signal. Neither holds today, so
+            // the result is reported as 'unavailable' and the UI shows the
+            // forensic evidence instead of a fabricated percentage.
+            const hasProbability = finalAiProb !== null;
+            const canJudge = hasProbability && MODEL_CALIBRATION.calibrated;
+
             const result: InferenceResult = {
-                isAI,
-                confidence,
+                status: canJudge ? 'ok' : 'model_unavailable',
+                modelCalibrated: MODEL_CALIBRATION.calibrated,
+                unavailableReason: canJudge ? undefined : (
+                    !hasProbability
+                        ? 'No AI class index is established for these checkpoints.'
+                        : MODEL_CALIBRATION.note
+                ),
+                isAI: canJudge ? (finalAiProb as number) > 0.5 : null,
+                confidence: canJudge
+                    ? Math.round(
+                        ((finalAiProb as number) > 0.5
+                            ? (finalAiProb as number)
+                            : 1 - (finalAiProb as number)) * 100)
+                    : null,
                 aiProbability: finalAiProb,
-                realProbability: 1 - finalAiProb,
+                realProbability: finalAiProb === null ? null : 1 - finalAiProb,
                 inferenceTime: duration,
                 cropResults,
                 totalCrops: crops.length,
                 globalProbability: globalAiProb,
-                localProbability: resultLocalProb
+                localProbability: resultLocalProb,
+                benchmarkReference: MODEL_CALIBRATION.benchmark
             };
 
             self.postMessage({ id, type: 'result', data: result });

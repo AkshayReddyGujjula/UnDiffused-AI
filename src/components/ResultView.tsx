@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 
 export interface ScanResult {
-    isAI: boolean;
-    confidence: number;
+    status?: 'ok' | 'model_unavailable';
+    modelCalibrated?: boolean;
+    unavailableReason?: string;
+    benchmarkReference?: string;
+    isAI: boolean | null;
+    confidence: number | null;
     heatmapData?: number[];
     heatmapWidth?: number;
     heatmapHeight?: number;
     filterData?: number[];
     cropResults?: { rect: { x: number, y: number, width: number, height: number } }[];
-    globalProbability?: number;
-    localProbability?: number;
+    globalProbability?: number | null;
+    localProbability?: number | null;
 }
 
 interface ResultViewProps {
@@ -57,6 +61,20 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
     const getResultDisplay = () => {
         const { isAI, confidence } = result;
+
+        // The models were measured against 100 labelled images and scored at
+        // chance (docs/benchmark/v1_baseline.json). Until a calibrated model
+        // ships, there is no verdict to show -- only the forensic evidence.
+        // Rendering a percentage here would be inventing a number.
+        if (result.status === 'model_unavailable' || isAI === null || confidence === null) {
+            return {
+                label: "No model verdict",
+                containerClass: "bg-white/10 border border-white/20",
+                dotClass: "bg-white/60",
+                textClass: "text-white/80",
+                barClass: "bg-white/40"
+            };
+        }
 
         if (confidence < 66) {
             return {
@@ -135,12 +153,12 @@ export const ResultView: React.FC<ResultViewProps> = ({
             <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                     <span className="text-white opacity-100 font-medium">Confidence</span>
-                    <span className="text-white/50">{result.confidence}%</span>
+                    <span className="text-white/50">{result.confidence === null ? '--' : `${result.confidence}%`}</span>
                 </div>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                     <div
                         className={`h-full rounded-full transition-all duration-500 ${display.barClass}`}
-                        style={{ width: `${result.confidence}%` }}
+                        style={{ width: `${result.confidence ?? 0}%` }}
                     />
                 </div>
             </div>
@@ -182,7 +200,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
                                 let borderColor = 'rgba(255, 255, 255, 0.9)';
                                 let bgColor = 'rgba(255, 255, 255, 0.2)';
 
-                                if (result.confidence >= 66) {
+                                if (result.confidence !== null && result.confidence >= 66) {
                                     if (result.isAI) {
                                         borderColor = 'rgba(239, 68, 68, 0.9)'; // Red-500
                                         bgColor = 'rgba(239, 68, 68, 0.3)';

@@ -77,6 +77,10 @@ export const Scanner: React.FC = () => {
             }
 
             setResult({
+                status: res.status,
+                modelCalibrated: res.modelCalibrated,
+                unavailableReason: res.unavailableReason,
+                benchmarkReference: res.benchmarkReference,
                 isAI: res.isAI,
                 confidence: res.confidence,
                 heatmapData: res.heatmapData || [],

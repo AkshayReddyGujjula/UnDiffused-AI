@@ -8,15 +8,30 @@ export interface CropRect {
 
 export interface CropResult {
     rect: CropRect;
-    aiProb: number;
-    realProb: number;
+    /** null when no AI class index is established for the model. */
+    aiProb: number | null;
+    realProb: number | null;
+    /** Full class distribution, always present. */
+    distribution?: number[];
 }
 
+export type InferenceStatus = 'ok' | 'model_unavailable';
+
 export interface InferenceResult {
-    isAI: boolean;
-    confidence: number;
-    aiProbability: number;
-    realProbability: number;
+    /**
+     * 'model_unavailable' means the pipeline ran but the models cannot support
+     * a verdict. Consumers must branch on this rather than reading isAI.
+     */
+    status: InferenceStatus;
+    modelCalibrated: boolean;
+    unavailableReason?: string;
+    benchmarkReference?: string;
+
+    /** null whenever status is 'model_unavailable'. */
+    isAI: boolean | null;
+    confidence: number | null;
+    aiProbability: number | null;
+    realProbability: number | null;
     inferenceTime: number;
     cropResults?: CropResult[];
     totalCrops?: number;
@@ -25,6 +40,6 @@ export interface InferenceResult {
     heatmapHeight?: number;
 
     // Dual-Model Specifics
-    globalProbability?: number;
-    localProbability?: number;
+    globalProbability?: number | null;
+    localProbability?: number | null;
 }

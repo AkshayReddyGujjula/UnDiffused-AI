@@ -1,6 +1,6 @@
 {
   "../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-s4TwoXi1.js",
+    "file": "assets/crx-manifest.js-DKs-kxBE.js",
     "name": "crx-manifest.js",
     "src": "../../../../../@crx/manifest",
     "isEntry": true
@@ -9,23 +9,23 @@
     "file": "assets/GlassCard-BMBPpFOK.js",
     "name": "GlassCard"
   },
-  "_index-BD0p7Gpv.css": {
-    "file": "assets/index-BD0p7Gpv.css",
-    "src": "_index-BD0p7Gpv.css"
-  },
-  "_index-Dfnmy8OC.js": {
-    "file": "assets/index-Dfnmy8OC.js",
+  "_index-0aApqYNk.js": {
+    "file": "assets/index-0aApqYNk.js",
     "name": "index",
     "imports": [
       "_GlassCard-BMBPpFOK.js"
     ],
     "css": [
-      "assets/index-BD0p7Gpv.css"
+      "assets/index-D9dT9aGY.css"
     ]
   },
-  "_index.tsx-loader-tB9ZLNEt.js": {
-    "file": "assets/index.tsx-loader-tB9ZLNEt.js",
-    "src": "_index.tsx-loader-tB9ZLNEt.js"
+  "_index-D9dT9aGY.css": {
+    "file": "assets/index-D9dT9aGY.css",
+    "src": "_index-D9dT9aGY.css"
+  },
+  "_index.tsx-loader-CYvaNQtG.js": {
+    "file": "assets/index.tsx-loader-CYvaNQtG.js",
+    "src": "_index.tsx-loader-CYvaNQtG.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -38,7 +38,7 @@
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-0KmtE0d7.js",
+    "file": "assets/index.tsx-CruaP83c.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,
@@ -56,13 +56,13 @@
     ]
   },
   "src/popup/popup.html": {
-    "file": "assets/popup.html-eOBYjmuC.js",
+    "file": "assets/popup.html-oQBFjLNc.js",
     "name": "popup.html",
     "src": "src/popup/popup.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_index-Dfnmy8OC.js",
+      "_index-0aApqYNk.js",
       "_GlassCard-BMBPpFOK.js"
     ]
   }
