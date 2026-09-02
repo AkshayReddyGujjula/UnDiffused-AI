@@ -45,3 +45,20 @@ Thumbs.db
 *.njsproj
 *.sln
 *.user
+
+# Benchmark eval-set image bytes (kept in-repo on disk, re-fetchable via
+# scripts/bench/fetch_eval_set.py; manifest.json pins source + sha256)
+docs/benchmark/eval_set_v1/real/
+docs/benchmark/eval_set_v1/ai/
+docs/benchmark/eval_set_v1/_scratch/
+docs/benchmark/fetch.log
+
+# Port-verification artifacts (all regenerable: scripts/bench/verify_port/compare.py)
+scripts/bench/verify_port/bundle.mjs
+scripts/bench/verify_port/spec.json
+scripts/bench/verify_port/ts_result.json
+scripts/bench/verify_port/*.rgba
+docs/benchmark/run.log
+
+# Forward-pass caches (regenerable; delete to force re-inference)
+docs/benchmark/raw_records_*.json
