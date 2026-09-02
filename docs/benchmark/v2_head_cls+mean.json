@@ -1,0 +1,134 @@
+{
+  "stage": "5 - baseline head, calibration, abstention band",
+  "generated_utc": "2026-09-02T20:57:15.142117+00:00",
+  "backbone": "dinov2-small",
+  "representation": "cls+mean",
+  "head": "logistic regression on frozen features",
+  "n_head_params": 769,
+  "temperature": 2.3611,
+  "v1_shipped_baseline_auroc": 0.5,
+  "splits": {
+    "train": {
+      "n": 3023,
+      "n_ai": 1290,
+      "auroc": 1.0,
+      "ci95": [
+        1.0,
+        1.0
+      ],
+      "accuracy": 1.0,
+      "fpr_at_95tpr": 0.0,
+      "ece": 0.0499,
+      "label": "train",
+      "per_generator": {
+        "stable-diffusion-v1-4": 1.0,
+        "IF-II-L-v1.0": 1.0,
+        "stable-diffusion-2-1-base": 1.0
+      }
+    },
+    "val": {
+      "n": 653,
+      "n_ai": 289,
+      "auroc": 0.9846,
+      "ci95": [
+        0.9763,
+        0.9917
+      ],
+      "accuracy": 0.9372,
+      "fpr_at_95tpr": 0.0632,
+      "ece": 0.0241,
+      "label": "val",
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.9843,
+        "IF-II-L-v1.0": 0.9916,
+        "stable-diffusion-2-1-base": 0.9792
+      }
+    },
+    "test": {
+      "n": 699,
+      "n_ai": 296,
+      "auroc": 0.982,
+      "ci95": [
+        0.9729,
+        0.9891
+      ],
+      "accuracy": 0.9299,
+      "fpr_at_95tpr": 0.0918,
+      "ece": 0.0159,
+      "label": "test",
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.9771,
+        "IF-II-L-v1.0": 0.9901,
+        "stable-diffusion-2-1-base": 0.9778
+      }
+    },
+    "test_heldout_SDXL": {
+      "n": 1028,
+      "n_ai": 625,
+      "auroc": 0.9897,
+      "ci95": [
+        0.9835,
+        0.9946
+      ],
+      "accuracy": 0.9514,
+      "fpr_at_95tpr": 0.0447,
+      "ece": 0.0122,
+      "label": "test_heldout_SDXL"
+    },
+    "evalset_v1": {
+      "n": 100,
+      "n_ai": 50,
+      "auroc": 0.9888,
+      "ci95": [
+        0.9708,
+        1.0
+      ],
+      "accuracy": 0.95,
+      "fpr_at_95tpr": 0.06,
+      "ece": 0.0425,
+      "label": "evalset_v1",
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.9831,
+        "IF-II-L-v1.0": 0.9908,
+        "stable-diffusion-2-1-base": 0.9883,
+        "stable-diffusion-xl-base-1.0": 0.9933
+      }
+    },
+    "matched_control_v1": {
+      "n": 800,
+      "n_ai": 400,
+      "auroc": 0.6571,
+      "ci95": [
+        0.6176,
+        0.6954
+      ],
+      "accuracy": 0.5975,
+      "fpr_at_95tpr": 0.78,
+      "ece": 0.3316,
+      "label": "matched_control_v1",
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.6065,
+        "IF-II-L-v1.0": 0.6987,
+        "stable-diffusion-2-1-base": 0.6142,
+        "stable-diffusion-xl-base-1.0": 0.7097
+      }
+    }
+  },
+  "abstention_band": {
+    "fitted_on": "val",
+    "target_fpr": 0.05,
+    "max_abstain": 0.25,
+    "band": {
+      "low": 0.37570223771293026,
+      "high": 0.6116755257822846,
+      "abstain_rate": 0.04134762633996936,
+      "fpr": 0.04815864022662889,
+      "tpr": 0.9597069597069597
+    },
+    "note": "null means no band met the target FPR within the abstention ceiling; that is a design failure and must surface here.",
+    "on_heldout_SDXL": {
+      "abstain_rate": 0.0282,
+      "accuracy_on_decided": 0.963
+    }
+  }
+}

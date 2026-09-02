@@ -58,15 +58,19 @@ MIN_SIDE = 160
 
 
 def get_image(url, headers, timeout=15):
-    """Fetch and validate an image. Returns (bytes, size) or None."""
+    """Fetch and validate an image. Returns (bytes, size) or None.
+
+    Validation is by decoding, not by Content-Type: the HuggingFace cached-asset
+    endpoint serves perfectly good JPEGs as `binary/octet-stream`, and an
+    earlier content-type check silently rejected every generated image and
+    produced zero pairs.
+    """
     try:
         r = requests.get(url, headers=headers, timeout=timeout)
         if r.status_code != 200 or not r.content:
             return None
-        if "image" not in r.headers.get("content-type", ""):
-            return None
         img = Image.open(io.BytesIO(r.content))
-        img.verify()
+        img.verify()                                   # cheap integrity check
         img = Image.open(io.BytesIO(r.content)).convert("RGB")
         if min(img.size) < MIN_SIDE:
             return None

@@ -130,9 +130,14 @@ def extract_corpus(corpus_dir: Path, out_dir: Path, key, processor, model, bs):
         print("  wrote {}  ({} usable)".format(dest.name, int(ok.sum())))
 
 
-def extract_eval_set(eval_dir: Path, out_dir: Path, key, processor, model, bs):
-    """The 100 images that produced the v1 baseline, so before/after is exact."""
-    dest = out_dir / "{}_evalset_v1.npz".format(key)
+def extract_eval_set(eval_dir: Path, out_dir: Path, key, processor, model, bs,
+                     name="evalset_v1"):
+    """A manifest-described set laid out as <dir>/{real,ai}/<file>.
+
+    Used for eval_set_v1 (the 100 images behind the v1 baseline, so before/after
+    is exact) and for matched_control_v1 (content-matched pairs).
+    """
+    dest = out_dir / "{}_{}.npz".format(key, name)
     if dest.exists():
         print("  {} exists, skipping".format(dest.name))
         return
@@ -158,6 +163,8 @@ def main():
     ap.add_argument("--corpus", type=Path, default=Path("docs/benchmark/corpus_v1"))
     ap.add_argument("--eval-dir", type=Path,
                     default=Path("docs/benchmark/eval_set_v1"))
+    ap.add_argument("--eval-name", default="evalset_v1",
+                    help="cache key for --eval-dir, e.g. matched_control_v1")
     ap.add_argument("--out", type=Path,
                     default=Path("docs/benchmark/corpus_v1/features"))
     ap.add_argument("--batch-size", type=int, default=16)
@@ -177,7 +184,7 @@ def main():
             sum(p.numel() for p in model.parameters()) / 1e6, time.time() - t0))
 
         extract_eval_set(args.eval_dir, args.out, key, processor, model,
-                         args.batch_size)
+                         args.batch_size, args.eval_name)
         if (args.corpus / "corpus_manifest.json").exists():
             extract_corpus(args.corpus, args.out, key, processor, model,
                            args.batch_size)

@@ -1,0 +1,276 @@
+{
+  "backbone": "facebook/dinov2-small",
+  "n": 800,
+  "method": "5-fold CV logistic regression on frozen DINOv2 features; diagnostic only, no generator holdout",
+  "v1_shipped_baseline_auroc": 0.5,
+  "transforms": {
+    "identity": {
+      "cls": {
+        "auroc": 0.758,
+        "ci95": [
+          0.72126453125,
+          0.7900724999999998
+        ]
+      },
+      "mean": {
+        "auroc": 0.8139,
+        "ci95": [
+          0.784960625,
+          0.8418921875000002
+        ]
+      },
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.7746,
+        "IF-II-L-v1.0": 0.8068,
+        "stable-diffusion-2-1-base": 0.7846,
+        "stable-diffusion-xl-base-1.0": 0.8939
+      },
+      "cls+mean": {
+        "auroc": 0.8187,
+        "ci95": [
+          0.79147234375,
+          0.84818171875
+        ]
+      }
+    },
+    "normalize_512_q90": {
+      "cls": {
+        "auroc": 0.744,
+        "ci95": [
+          0.71045609375,
+          0.7771315625
+        ]
+      },
+      "mean": {
+        "auroc": 0.8248,
+        "ci95": [
+          0.79663875,
+          0.8540984375000001
+        ]
+      },
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.7892,
+        "IF-II-L-v1.0": 0.8089,
+        "stable-diffusion-2-1-base": 0.8079,
+        "stable-diffusion-xl-base-1.0": 0.8978
+      },
+      "cls+mean": {
+        "auroc": 0.8149,
+        "ci95": [
+          0.784779375,
+          0.8432885937500001
+        ]
+      }
+    },
+    "jpeg_q75": {
+      "cls": {
+        "auroc": 0.784,
+        "ci95": [
+          0.75142890625,
+          0.81296109375
+        ]
+      },
+      "mean": {
+        "auroc": 0.828,
+        "ci95": [
+          0.79886203125,
+          0.85527171875
+        ]
+      },
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.7886,
+        "IF-II-L-v1.0": 0.8175,
+        "stable-diffusion-2-1-base": 0.8057,
+        "stable-diffusion-xl-base-1.0": 0.9044
+      },
+      "cls+mean": {
+        "auroc": 0.8384,
+        "ci95": [
+          0.80987046875,
+          0.8658198437500001
+        ]
+      }
+    },
+    "jpeg_q50": {
+      "cls": {
+        "auroc": 0.7584,
+        "ci95": [
+          0.7259882812500001,
+          0.7909473437500001
+        ]
+      },
+      "mean": {
+        "auroc": 0.8211,
+        "ci95": [
+          0.7943549999999999,
+          0.8478017187500001
+        ]
+      },
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.789,
+        "IF-II-L-v1.0": 0.7955,
+        "stable-diffusion-2-1-base": 0.8131,
+        "stable-diffusion-xl-base-1.0": 0.8916
+      },
+      "cls+mean": {
+        "auroc": 0.8193,
+        "ci95": [
+          0.78932796875,
+          0.8478237500000001
+        ]
+      }
+    },
+    "jpeg_q30": {
+      "cls": {
+        "auroc": 0.776,
+        "ci95": [
+          0.7431745312499999,
+          0.8083240625
+        ]
+      },
+      "mean": {
+        "auroc": 0.818,
+        "ci95": [
+          0.7881934375,
+          0.8454885937500001
+        ]
+      },
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.7871,
+        "IF-II-L-v1.0": 0.7872,
+        "stable-diffusion-2-1-base": 0.814,
+        "stable-diffusion-xl-base-1.0": 0.8889
+      },
+      "cls+mean": {
+        "auroc": 0.8274,
+        "ci95": [
+          0.797793125,
+          0.85621953125
+        ]
+      }
+    },
+    "double_jpeg": {
+      "cls": {
+        "auroc": 0.7904,
+        "ci95": [
+          0.75777140625,
+          0.8207387500000001
+        ]
+      },
+      "mean": {
+        "auroc": 0.8311,
+        "ci95": [
+          0.80127203125,
+          0.8570457812499999
+        ]
+      },
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.796,
+        "IF-II-L-v1.0": 0.8189,
+        "stable-diffusion-2-1-base": 0.8109,
+        "stable-diffusion-xl-base-1.0": 0.903
+      },
+      "cls+mean": {
+        "auroc": 0.8411,
+        "ci95": [
+          0.8167303124999999,
+          0.865793125
+        ]
+      }
+    },
+    "resize_chain": {
+      "cls": {
+        "auroc": 0.7828,
+        "ci95": [
+          0.750439375,
+          0.8139653124999999
+        ]
+      },
+      "mean": {
+        "auroc": 0.8197,
+        "ci95": [
+          0.79351125,
+          0.8473499999999999
+        ]
+      },
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.782,
+        "IF-II-L-v1.0": 0.7927,
+        "stable-diffusion-2-1-base": 0.8165,
+        "stable-diffusion-xl-base-1.0": 0.8928
+      },
+      "cls+mean": {
+        "auroc": 0.8361,
+        "ci95": [
+          0.8093107812499999,
+          0.8629564062499999
+        ]
+      }
+    },
+    "webp_q75": {
+      "cls": {
+        "auroc": 0.7571,
+        "ci95": [
+          0.722754375,
+          0.79049625
+        ]
+      },
+      "mean": {
+        "auroc": 0.8151,
+        "ci95": [
+          0.7838681250000001,
+          0.8423810937500001
+        ]
+      },
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.7858,
+        "IF-II-L-v1.0": 0.7842,
+        "stable-diffusion-2-1-base": 0.8011,
+        "stable-diffusion-xl-base-1.0": 0.8947
+      },
+      "cls+mean": {
+        "auroc": 0.8136,
+        "ci95": [
+          0.7855546874999999,
+          0.8414081250000001
+        ]
+      }
+    },
+    "screenshot": {
+      "cls": {
+        "auroc": 0.7715,
+        "ci95": [
+          0.73860765625,
+          0.8014210937499999
+        ]
+      },
+      "mean": {
+        "auroc": 0.8205,
+        "ci95": [
+          0.7925965625,
+          0.847481875
+        ]
+      },
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.7816,
+        "IF-II-L-v1.0": 0.8082,
+        "stable-diffusion-2-1-base": 0.7987,
+        "stable-diffusion-xl-base-1.0": 0.898
+      },
+      "cls+mean": {
+        "auroc": 0.8293,
+        "ci95": [
+          0.80025421875,
+          0.8589121875
+        ]
+      }
+    }
+  },
+  "verdict": {
+    "identity_auroc": 0.8139,
+    "normalized_auroc": 0.8248,
+    "confound_delta": -0.0109,
+    "worst_laundered_auroc": 0.8139,
+    "reading": "Signal survives the confound control; the separation is not encoder history or resolution."
+  }
+}

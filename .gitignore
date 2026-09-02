@@ -74,3 +74,9 @@ docs/benchmark/corpus.log
 docs/benchmark/matched_control_v1/real/
 docs/benchmark/matched_control_v1/ai/
 docs/benchmark/matched.log
+
+# Matched-pair corpus image bytes (regenerable: scripts/bench/fetch_matched_control.py)
+docs/benchmark/matched_corpus_v1/real/
+docs/benchmark/matched_corpus_v1/ai/
+docs/benchmark/matched_corpus.log
+docs/benchmark/features.log

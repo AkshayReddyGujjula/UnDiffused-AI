@@ -1,0 +1,25 @@
+
+=== backbone: dinov2-small ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/223 [00:00<?, ?it/s]Loading weights: 100%|##########| 223/223 [00:00<00:00, 9473.61it/s]
+  loaded 22.1M params in 1.0s
+  dinov2-small_evalset_v1.npz exists, skipping
+  split 'test': 699 images
+    512/699  0.050s/img  eta 9s
+  wrote dinov2-small_test.npz  (699 usable)
+  split 'test_heldout': 625 images
+    512/625  0.051s/img  eta 6s
+  wrote dinov2-small_test_heldout.npz  (625 usable)
+  split 'train': 3023 images
+    512/3023  0.053s/img  eta 134s
+    1008/3023  0.053s/img  eta 106s
+    1504/3023  0.053s/img  eta 81s
+    2000/3023  0.052s/img  eta 53s
+    2512/3023  0.050s/img  eta 26s
+    3008/3023  0.049s/img  eta 1s
+  wrote dinov2-small_train.npz  (3023 usable)
+  split 'val': 653 images
+    512/653  0.047s/img  eta 7s
+  wrote dinov2-small_val.npz  (653 usable)
+
+Feature cache: docs\benchmark\corpus_v1\features
