@@ -5,7 +5,7 @@ whether that resumption is Claude after a usage-limit reset or a human reading
 this in the morning.
 
 **Branch:** `stage1-baseline` (local only — do not push without asking)
-**Last updated:** 2026-09-02 21:25 UTC
+**Last updated:** 2026-09-02 21:55 UTC
 
 ## Locked direction (agreed with Akshay before he slept)
 
@@ -22,9 +22,9 @@ this in the morning.
 | Stage | State | Evidence |
 |---|---|---|
 | 1 — ground truth on shipped models | **DONE** | `docs/benchmark/v1_baseline.json`, `v1_baseline_note.md` |
-| 2 — measurement harness | in progress | `docs/benchmark/PROTOCOL.md` exists; laundering + holdout not yet built |
-| 3 — data (scaled) | not started | |
-| 4 — DINOv2 feature extraction (scaled) | not started | |
+| 2 — measurement harness | **DONE** | `laundering.py` (9 transforms), `probe_confound.py`, holdout wired into `fetch_corpus.py` |
+| 3 — data (scaled) | downloading | `fetch_corpus.py` running; SDXL held out entirely |
+| 4 — DINOv2 feature extraction (scaled) | harness ready | `extract_features.py`; eval-set features cached; 0.117 s/img on CPU |
 | 5 — head + calibration + abstention band | not started | |
 | worker.ts fix + contract assert | **DONE** | `src/content/inference/contract.ts`, `tests/parse.test.mjs` (12 passing), `npm run build` clean |
 
@@ -37,6 +37,31 @@ generated images and flagged **1 of 50** photographs. No preprocessing in a
 consistent with noise). The parsing bug is real but repairing it changes
 0.472 → 0.445 AUROC: it was hiding an absence, not a capability.
 
+## OPEN RISK — read this first on resume
+
+The feasibility probe put DINOv2-small at **0.91 AUROC** on the same 100 images
+where the shipped checkpoints scored 0.50, and it held flat (0.905–0.910)
+through every laundering transform including JPEG q30 and a screenshot
+simulation.
+
+**That flatness is a warning, not a triumph.** Generator artefacts are
+high-frequency and should degrade under recompression; semantic content does
+not. COCO is everyday scenes, while ELSA prompts come from LAION web alt-text
+(posters, product shots, news imagery). The probe may be separating
+"COCO-style scene" from "LAION-style scene" and never looking at authenticity
+at all.
+
+`fetch_matched_control.py` builds the decisive control: each ELSA_D3 row's
+`url` field is the LAION original whose alt-text became the generation prompt,
+so downloading it yields a real image from the *same content distribution* as
+the render in that row. Content held constant, only authenticity varies.
+
+- If the probe still scores ~0.9 there, the signal is real.
+- **If it falls towards chance, the 0.91 is an artefact of corpus mismatch and
+  must not be reported as a detection result.**
+
+Do not publish any headline number before this control has been run.
+
 ## Immediate next actions, in order
 
 1. ~~Fix `worker.ts`~~ — **DONE.** Parsing extracted to `contract.ts` as pure
@@ -45,14 +70,16 @@ consistent with noise). The parsing bug is real but repairing it changes
    `model_unavailable` status so the UI shows "No model verdict" instead of a
    fabricated percentage. `npm test` runs 12 regression tests via Node's built-in
    runner (no new deps).
-2. **Stage 2 harness** — extend `scripts/bench/` with:
-   generator-family holdout splits; laundering augmentations at eval time (JPEG
-   quality ladder, resize chains, screenshot re-capture); ECE alongside AUROC
-   and FPR@95TPR.
-3. **Stage 3 data (scaled)** — stream ~5–6k images via the HF rows API using the
-   existing `fetch_eval_set.py` machinery. Real half from COCO; generated half
-   from ELSA_D3 across all four generators. **Hold one generator family out
-   entirely** for the cross-generator test. Never write more than needed to disk.
+2. ~~Stage 2 harness~~ — **DONE.** `laundering.py` has 9 transforms
+   (identity, the confound control, a JPEG quality ladder, double JPEG, resize
+   chain, WebP, screenshot). `probe_confound.py` runs the full suite. ECE and
+   FPR@95TPR still to add in Stage 5's report.
+3. **Stage 3 data (scaled)** — `fetch_corpus.py` is running (2500 real + 2500
+   AI, SDXL held out entirely to `test_heldout`, eval_set_v1 row offsets
+   excluded to prevent leakage). Watch for HTTP 429; the retry/backoff handles
+   it but paging is slow.
+3b. **Matched-content control** — `fetch_matched_control.py` running, 400 pairs.
+   This gates everything downstream. See OPEN RISK above.
 4. **Stage 4 features (scaled)** — frozen DINOv2 ViT-S/14 forward pass, CPU,
    cache embeddings to `.npy`. Budget ~0.1–0.2 s/image on CPU, so ~6k images is
    15–20 min. Cache is the whole point: every later experiment is then seconds.
