@@ -104,3 +104,6 @@ scripts/verify/contract.mjs
 
 # Run logs (regenerable)
 *.log
+
+# Scratch files from review tooling, never part of the project
+_*.txt
