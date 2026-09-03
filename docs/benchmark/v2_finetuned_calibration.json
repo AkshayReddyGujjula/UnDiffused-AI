@@ -1,0 +1,26 @@
+{
+  "model": "public/models/detector_v2_finetuned_int8.onnx",
+  "temperature": 1.9077,
+  "abstention_band": {
+    "low": 0.2102,
+    "high": 0.6482
+  },
+  "fitted_on_val": {
+    "low": 0.2102,
+    "high": 0.6482,
+    "abstain_rate": 0.1587,
+    "fpr": 0.0497,
+    "tpr": 0.9385
+  },
+  "external_check": {
+    "auroc": 0.9543,
+    "ece_calibrated": 0.0222,
+    "band_behaviour": {
+      "n": 800,
+      "abstain_rate": 0.1425,
+      "fpr_on_decided_real": 0.0688,
+      "tpr_on_decided_ai": 0.9377
+    }
+  },
+  "val_auroc": 0.9583
+}
