@@ -223,7 +223,15 @@ def main():
         try:
             from onnxruntime.quantization import quantize_dynamic, QuantType
             q = args.out_dir / "{}_int8.onnx".format(args.name)
-            quantize_dynamic(str(fp32), str(q), weight_type=QuantType.QInt8)
+            # Quantize MatMul only. Quantizing Conv emits ConvInteger, which
+            # onnxruntime-web's WASM backend has no kernel for -- the model
+            # loads fine under Python onnxruntime and then fails outright in the
+            # browser with "Could not find an implementation for ConvInteger".
+            # The patch-embedding Conv is ~225K parameters, so leaving it in
+            # fp32 costs almost nothing in size. Verified by
+            # scripts/verify/browser_check.html.
+            quantize_dynamic(str(fp32), str(q), weight_type=QuantType.QInt8,
+                             op_types_to_quantize=["MatMul"])
             qs = ort.InferenceSession(str(q), providers=["CPUExecutionProvider"])
             q_out = np.asarray(qs.run([qs.get_outputs()[0].name],
                                       {qs.get_inputs()[0].name: pix.numpy()})[0]

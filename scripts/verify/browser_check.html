@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>detector_v2 browser verification</title>
+  <style>
+    body { font: 14px ui-monospace, monospace; padding: 20px; background:#111; color:#eee; }
+    .row { padding: 4px 0; }
+    .ok { color:#6ee7a8; } .bad { color:#f87171; } .mid { color:#fbbf24; }
+    #summary { margin-top: 16px; padding: 12px; border:1px solid #444; }
+  </style>
+</head>
+<body>
+<h3>detector_v2_probe_int8 — onnxruntime-web (WASM) verification</h3>
+<div id="log"></div>
+<div id="summary">running…</div>
+
+<script src="/node_modules/onnxruntime-web/dist/ort.min.js"></script>
+<script src="/scripts/verify/cases.js"></script>
+<script>
+// Verifies the shipped int8 model actually loads and runs under the same
+// runtime the extension uses (onnxruntime-web on WASM), and that it separates
+// known-real from known-generated images. Python ONNX working proves nothing
+// about the browser: op coverage differs between execution providers.
+
+const MEAN = [0.485, 0.456, 0.406];
+const STD  = [0.229, 0.224, 0.225];
+const SIZE = 224;
+
+const log = (msg, cls='') => {
+  const d = document.createElement('div');
+  d.className = 'row ' + cls;
+  d.textContent = msg;
+  document.getElementById('log').appendChild(d);
+  console.log(msg);
+};
+
+async function toTensor(url) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+  const c = document.createElement('canvas');
+  c.width = SIZE; c.height = SIZE;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, SIZE, SIZE);
+  const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
+  const f = new Float32Array(3 * SIZE * SIZE);
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    f[i]                 = (data[i*4]   / 255 - MEAN[0]) / STD[0];
+    f[i + SIZE*SIZE]     = (data[i*4+1] / 255 - MEAN[1]) / STD[1];
+    f[i + 2*SIZE*SIZE]   = (data[i*4+2] / 255 - MEAN[2]) / STD[2];
+  }
+  return new ort.Tensor('float32', f, [1, 3, SIZE, SIZE]);
+}
+
+const sigmoid = x => 1 / (1 + Math.exp(-x));
+
+(async () => {
+  try {
+    ort.env.wasm.wasmPaths = '/node_modules/onnxruntime-web/dist/';
+    ort.env.wasm.numThreads = 1;
+
+    const meta = await (await fetch('/public/models/detector_v2_probe_meta.json?cb=' + Date.now())).json();
+    log(`metadata: in=${meta.input_name} out=${meta.output_name} size=${meta.input_size}`);
+
+    const t0 = performance.now();
+    const sess = await ort.InferenceSession.create(
+      '/public/models/detector_v2_probe_int8.onnx?cb=' + Date.now(),
+      { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+    log(`session created in ${(performance.now()-t0).toFixed(0)}ms`, 'ok');
+
+    // Contract assertion, same as the extension does at load time.
+    if (!sess.inputNames.includes(meta.input_name) ||
+        !sess.outputNames.includes(meta.output_name)) {
+      throw new Error(`contract mismatch: graph has [${sess.inputNames}] -> [${sess.outputNames}]`);
+    }
+    log(`contract verified: ${sess.inputNames} -> ${sess.outputNames}`, 'ok');
+
+    const cases = window.__CASES__;
+    const results = [];
+    for (const c of cases) {
+      const tensor = await toTensor(c.url);
+      const t1 = performance.now();
+      const out = await sess.run({ [meta.input_name]: tensor });
+      const ms = performance.now() - t1;
+      const logit = Number(out[meta.output_name].data[0]);
+      const p = sigmoid(logit);
+      const verdict = p < 0.5448 ? 'likely_authentic'
+                    : p > 0.8461 ? 'likely_ai' : 'inconclusive';
+      const correct = (c.label === 'ai') ? (p > 0.5448) : (p < 0.8461);
+      results.push({ ...c, p, verdict, ms, correct });
+      log(`${c.label.padEnd(4)} ${c.name.padEnd(24)} P(AI)=${p.toFixed(4)}  ${verdict.padEnd(17)} ${ms.toFixed(0)}ms`,
+          correct ? 'ok' : 'bad');
+    }
+
+    const aiP = results.filter(r => r.label === 'ai').map(r => r.p);
+    const reP = results.filter(r => r.label === 'real').map(r => r.p);
+    const mean = a => a.reduce((x,y)=>x+y,0)/a.length;
+    const avgMs = mean(results.map(r => r.ms));
+
+    const separates = mean(aiP) > mean(reP);
+    document.getElementById('summary').innerHTML =
+      `<b>mean P(AI): generated=${mean(aiP).toFixed(4)}  real=${mean(reP).toFixed(4)}</b><br>` +
+      `separation: ${separates ? 'CORRECT DIRECTION' : 'WRONG DIRECTION'}<br>` +
+      `mean latency: ${avgMs.toFixed(0)}ms per image (WASM, 1 thread)<br>` +
+      `<span id="verdict">${separates ? 'BROWSER_CHECK_PASS' : 'BROWSER_CHECK_FAIL'}</span>`;
+    log(separates ? 'BROWSER_CHECK_PASS' : 'BROWSER_CHECK_FAIL', separates ? 'ok' : 'bad');
+  } catch (e) {
+    document.getElementById('summary').textContent = 'BROWSER_CHECK_FAIL: ' + e.message;
+    log('BROWSER_CHECK_FAIL: ' + e.message, 'bad');
+    console.error(e);
+  }
+})();
+</script>
+</body>
+</html>

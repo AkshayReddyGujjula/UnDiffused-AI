@@ -86,3 +86,6 @@ models/
 models/v2/*.onnx
 docs/benchmark/score_int8.log
 docs/benchmark/feat_matched.log
+
+docs/benchmark/score_v2.log
+scripts/verify/cases.js
