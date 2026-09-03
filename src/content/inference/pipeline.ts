@@ -5,8 +5,7 @@ import Worker from './worker?worker&inline';
 
 const workerInitPayload = {
     modelPaths: {
-        global: chrome.runtime.getURL('models/model_global_quantized.onnx'),
-        local: chrome.runtime.getURL('models/model_local_quantized.onnx'),
+        detector: chrome.runtime.getURL('models/detector_v2_probe_int8.onnx'),
     },
     wasmPaths: {
         'ort-wasm.wasm': chrome.runtime.getURL('wasm/ort-wasm.wasm'),

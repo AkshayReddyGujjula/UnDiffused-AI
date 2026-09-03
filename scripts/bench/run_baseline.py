@@ -316,7 +316,7 @@ def build_conclusions(results):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--eval-dir", type=Path, default=Path("docs/benchmark/eval_set_v1"))
-    ap.add_argument("--models", type=Path, default=Path("public/models"))
+    ap.add_argument("--models", type=Path, default=Path("models/v1_archive"))
     ap.add_argument("--out", type=Path, default=Path("docs/benchmark/v1_baseline.json"))
     ap.add_argument("--variants", nargs="+", default=["raw", "normalized"])
     args = ap.parse_args()

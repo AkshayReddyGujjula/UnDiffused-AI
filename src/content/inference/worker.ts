@@ -1,19 +1,20 @@
 import * as ort from 'onnxruntime-web';
 import { CropRect, InferenceResult, CropResult } from './types';
 import {
-    MODEL_CONTRACTS,
-    MODEL_CALIBRATION,
     ModelContract,
     assertModelContract,
-    logitsToDistributions,
-    toAiProbability,
+    logitsToAiProbabilities,
+    DETECTOR_V2,
+    DETECTOR_V2_CALIBRATION,
+    ABSTENTION_BAND,
+    toVerdict,
 } from './contract';
 
 console.log('[Worker] Worker script loaded and starting...');
 
 // Configuration (received from main thread)
 let config: {
-    modelPaths: { global: string; local: string };
+    modelPaths: { detector: string };
     wasmPaths: string | Record<string, string>;
 } | null = null;
 
@@ -21,8 +22,7 @@ const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 const TARGET_SIZE = 224;
 
-let sessionGlobal: ort.InferenceSession | null = null;
-let sessionLocal: ort.InferenceSession | null = null;
+let sessionDetector: ort.InferenceSession | null = null;
 let inferenceQueue: Promise<void> = Promise.resolve();
 
 
@@ -75,11 +75,10 @@ function extractCropToTensor(
 
 // --- Model Loader ---
 async function loadModels() {
-    if (sessionGlobal && sessionLocal) return;
+    if (sessionDetector) return;
     if (!config) throw new Error("Worker not initialized with config");
 
     try {
-        // Initialize ORT env with paths
         ort.env.wasm.wasmPaths = config.wasmPaths;
         ort.env.wasm.numThreads = 1;
         ort.env.wasm.simd = true;
@@ -90,27 +89,20 @@ async function loadModels() {
             enableCpuMemArena: true,
         };
 
-        const [global, local] = await Promise.all([
-            ort.InferenceSession.create(config.modelPaths.global, options),
-            ort.InferenceSession.create(config.modelPaths.local, options)
-        ]);
+        const session = await ort.InferenceSession.create(
+            config.modelPaths.detector, options);
 
-        // Assert the tensor contract before anything is allowed to run. A
-        // mismatch here is a hard failure: the alternative is what shipped
-        // previously, which was to guess and render the guess as a percentage.
-        assertModelContract(global, MODEL_CONTRACTS.global);
-        assertModelContract(local, MODEL_CONTRACTS.local);
+        // Assert the tensor contract before anything is allowed to run. The
+        // v1 path guessed at the interface and rendered the guess as a
+        // percentage for the project's entire history.
+        assertModelContract(session, DETECTOR_V2);
+        sessionDetector = session;
 
-        sessionGlobal = global;
-        sessionLocal = local;
-        console.log('[Worker] Both models loaded and contracts verified');
-        if (!MODEL_CALIBRATION.calibrated) {
-            console.warn(
-                '[Worker] Models are UNCALIBRATED. Measured AUROC ' +
-                `${MODEL_CALIBRATION.measuredAuroc} on ${MODEL_CALIBRATION.benchmark}. ` +
-                'No verdict will be produced. ' + MODEL_CALIBRATION.note
-            );
-        }
+        console.log(
+            '[Worker] detector_v2 loaded and contract verified. ' +
+            `Held-out-generator AUROC ${DETECTOR_V2_CALIBRATION.heldoutGeneratorAuroc} ` +
+            `(v1 shipped: ${DETECTOR_V2_CALIBRATION.v1ShippedAuroc}).`
+        );
     } catch (e) {
         console.error('[Worker] Model load failed', e);
         throw e;
@@ -132,12 +124,13 @@ async function runInference(
     session: ort.InferenceSession,
     inputTensor: ort.Tensor,
     contract: ModelContract
-): Promise<number[][]> {
+): Promise<number[]> {
     const results = await session.run({ [contract.inputName]: inputTensor });
     const outputTensor = results[contract.outputName];
-    return logitsToDistributions(
-        outputTensor.data as Float32Array, outputTensor.dims, contract);
+    return logitsToAiProbabilities(
+        outputTensor.data as Float32Array, outputTensor.dims);
 }
+
 
 // --- Message Handler ---
 async function processMessage(e: MessageEvent): Promise<void> {
@@ -156,172 +149,85 @@ async function processMessage(e: MessageEvent): Promise<void> {
     }
 
     if (action === 'inference') {
-        const { bitmap, crops, mode } = e.data;
+        // Deep vs default scan is decided in pipeline.ts by which crops it sends.
+        const { bitmap, crops } = e.data;
         const startTime = performance.now();
 
         try {
             if (!config) throw new Error("Worker not initialized");
             await loadModels();
-            if (!sessionGlobal || !sessionLocal) throw new Error("Sessions not initialized");
+            if (!sessionDetector) throw new Error("Session not initialized");
 
-            // --- STAGE 1: Global Scan (4-Crop Grid Strategy) ---
-            // Divide image into 4 equal quadrants to preserve detail
-            const halfW = Math.floor(bitmap.width / 2);
-            const halfH = Math.floor(bitmap.height / 2);
+            // --- The verdict: whole image, one forward pass -----------------
+            // The model was trained on whole images resized to 224, so that is
+            // what it is scored on. The previous pipeline's quadrant averaging
+            // and 25/75 global-local blend were tuned against a model that
+            // turned out to carry no signal, so none of it is carried over.
+            const wholeTensor = extractCropToTensor(bitmap, {
+                x: 0, y: 0, width: bitmap.width, height: bitmap.height,
+                label: 'Whole'
+            });
+            const [aiProbability] = await runInference(
+                sessionDetector, wholeTensor, DETECTOR_V2);
 
-            const globalCrops: CropRect[] = [
-                { x: 0, y: 0, width: halfW, height: halfH, label: 'Global_TL' },
-                { x: halfW, y: 0, width: halfW, height: halfH, label: 'Global_TR' },
-                { x: 0, y: halfH, width: halfW, height: halfH, label: 'Global_BL' },
-                { x: halfW, y: halfH, width: halfW, height: halfH, label: 'Global_BR' }
-            ];
+            const verdict = toVerdict(aiProbability);
+            console.log(`[Worker] P(AI)=${aiProbability.toFixed(4)} -> ${verdict}`);
 
-            // Extract and Batch
-            const globalTensors = globalCrops.map(crop => extractCropToTensor(bitmap, crop));
-            const globalBatchInput = batchTensors(globalTensors);
+            // --- Evidence: per-crop scores for the heatmap ------------------
+            // These are shown as evidence, not as the verdict. Individual
+            // 224x224 crops are out of distribution relative to training, so
+            // they localise where the model reacts without being scored
+            // themselves.
+            const cropResults: CropResult[] = [];
+            const localCrops = (crops || []).filter(
+                (c: CropRect) => c.label !== 'Global');
 
-            // Run Global Model on Batch of 4
-            const globalDists = await runInference(
-                sessionGlobal, globalBatchInput, MODEL_CONTRACTS.global);
+            if (localCrops.length > 0) {
+                const BATCH_SIZE = 8;
+                for (let i = 0; i < localCrops.length; i += BATCH_SIZE) {
+                    const batchCrops = localCrops.slice(i, i + BATCH_SIZE);
+                    const tensors = batchCrops.map(
+                        (crop: CropRect) => extractCropToTensor(bitmap, crop));
+                    const probs = await runInference(
+                        sessionDetector, batchTensors(tensors), DETECTOR_V2);
 
-            // Collapse each quadrant to an AI probability, if the contract
-            // establishes one. It currently does not, so this is all nulls.
-            const globalPerCrop = globalDists.map(
-                d => toAiProbability(d, MODEL_CONTRACTS.global));
-            const globalUsable = globalPerCrop.filter(
-                (p): p is number => p !== null);
-
-            const globalAiProb = globalUsable.length === globalPerCrop.length
-                ? globalUsable.reduce((a, b) => a + b, 0) / globalUsable.length
-                : null;
-
-            console.log('[Worker] Global distributions:', globalDists,
-                '-> AI prob:', globalAiProb === null ? 'N/A (no AI class established)'
-                    : globalAiProb.toFixed(4));
-
-            // --- Fast Exit Strategy (Normal Mode Only) ---
-            let finalAiProb: number | null = globalAiProb;
-            let resultLocalProb: number | undefined = undefined;
-            let cropResults: CropResult[] = [];
-
-            // If Deep Scan OR (Normal Scan AND Global is uncertain).
-            // With no AI class established the global score is null, so the
-            // gate cannot be evaluated and we always continue to the local
-            // stage rather than short-circuiting on an unknown.
-            const isUncertain = globalAiProb === null
-                || (globalAiProb > 0.05 && globalAiProb < 0.95);
-
-            if (mode === 'deep' || isUncertain) {
-                console.log('[Worker] Proceeding to Local Scan...');
-
-                // --- STAGE 2: Local Scan ---
-                // Filter out the "Global" crop from the crops list if it exists, processing only sub-crops
-                // content/crops.ts generates a 'Global' crop first.
-                const localCrops = crops.filter((c: CropRect) => c.label !== 'Global');
-
-                if (localCrops.length > 0) {
-                    const BATCH_SIZE = 8;
-
-                    const localScores: number[] = [];
-
-                    for (let i = 0; i < localCrops.length; i += BATCH_SIZE) {
-                        const batchCrops = localCrops.slice(i, i + BATCH_SIZE);
-                        const tensors = batchCrops.map((crop: CropRect) => extractCropToTensor(bitmap, crop));
-                        const batchInput = batchTensors(tensors);
-
-                        const batchDists = await runInference(
-                            sessionLocal, batchInput, MODEL_CONTRACTS.local);
-
-                        batchDists.forEach((dist, idx) => {
-                            const p = toAiProbability(dist, MODEL_CONTRACTS.local);
-                            if (p !== null) localScores.push(p);
-                            cropResults.push({
-                                rect: batchCrops[idx],
-                                aiProb: p,
-                                realProb: p === null ? null : 1 - p,
-                                distribution: dist
-                            });
+                    probs.forEach((pAi, idx) => {
+                        cropResults.push({
+                            rect: batchCrops[idx],
+                            aiProb: pAi,
+                            realProb: 1 - pAi,
                         });
+                    });
 
-                        // Report Progress
-                        const processed = Math.min(i + BATCH_SIZE, localCrops.length);
-                        self.postMessage({
-                            id,
-                            type: 'progress',
-                            processed,
-                            total: localCrops.length
-                        });
-
-                        await new Promise(r => setTimeout(r, 0));
-                    }
-
-                    // --- STAGE 3: Fusion ---
-                    // Strategy: Average of Top 3 Local Scores
-                    localScores.sort((a, b) => b - a);
-                    let localAiProb = 0;
-                    if (localScores.length >= 3) {
-                        const top3 = localScores.slice(0, 3);
-                        localAiProb = top3.reduce((a, b) => a + b, 0) / 3;
-                    } else if (localScores.length > 0) {
-                        localAiProb = localScores[0];
-                    }
-
-                    // Weighted Fusion: 25% Global, 75% Local.
-                    // Only meaningful when both stages produced a real number;
-                    // with no AI class established both are null and so is the
-                    // fusion. We do not substitute a default.
-                    if (globalAiProb !== null && localScores.length > 0) {
-                        finalAiProb = (0.25 * globalAiProb) + (0.75 * localAiProb);
-                        resultLocalProb = localAiProb;
-                    } else {
-                        finalAiProb = null;
-                    }
-
-                    // Add global result for UI visualization if needed
-                    // User requested to hide global crops.
-                    // If we wanted to, we could add a "dummy" global crop covering 100% 
-                    // or just leave it out. Leaving it out.
-
+                    self.postMessage({
+                        id, type: 'progress',
+                        processed: Math.min(i + BATCH_SIZE, localCrops.length),
+                        total: localCrops.length
+                    });
+                    await new Promise(r => setTimeout(r, 0));
                 }
-            } else {
-                console.log('[Worker] Fast Exit triggered.');
-                // User requested to hide global crops.
-                // cropResults is empty here, which is fine.
             }
-
 
             const duration = performance.now() - startTime;
 
-            // A verdict requires two things: a usable probability, and models
-            // that have been measured to carry signal. Neither holds today, so
-            // the result is reported as 'unavailable' and the UI shows the
-            // forensic evidence instead of a fabricated percentage.
-            const hasProbability = finalAiProb !== null;
-            const canJudge = hasProbability && MODEL_CALIBRATION.calibrated;
-
             const result: InferenceResult = {
-                status: canJudge ? 'ok' : 'model_unavailable',
-                modelCalibrated: MODEL_CALIBRATION.calibrated,
-                unavailableReason: canJudge ? undefined : (
-                    !hasProbability
-                        ? 'No AI class index is established for these checkpoints.'
-                        : MODEL_CALIBRATION.note
-                ),
-                isAI: canJudge ? (finalAiProb as number) > 0.5 : null,
-                confidence: canJudge
-                    ? Math.round(
-                        ((finalAiProb as number) > 0.5
-                            ? (finalAiProb as number)
-                            : 1 - (finalAiProb as number)) * 100)
-                    : null,
-                aiProbability: finalAiProb,
-                realProbability: finalAiProb === null ? null : 1 - finalAiProb,
+                status: 'ok',
+                modelCalibrated: DETECTOR_V2_CALIBRATION.calibrated,
+                verdict,
+                abstentionBand: {
+                    low: ABSTENTION_BAND.low,
+                    high: ABSTENTION_BAND.high,
+                },
+                isAI: verdict === 'likely_ai',
+                confidence: Math.round(
+                    (aiProbability > 0.5 ? aiProbability : 1 - aiProbability) * 100),
+                aiProbability,
+                realProbability: 1 - aiProbability,
                 inferenceTime: duration,
                 cropResults,
-                totalCrops: crops.length,
-                globalProbability: globalAiProb,
-                localProbability: resultLocalProb,
-                benchmarkReference: MODEL_CALIBRATION.benchmark
+                totalCrops: cropResults.length,
+                benchmarkReference: DETECTOR_V2_CALIBRATION.benchmark,
+                measuredAuroc: DETECTOR_V2_CALIBRATION.heldoutGeneratorAuroc,
             };
 
             self.postMessage({ id, type: 'result', data: result });

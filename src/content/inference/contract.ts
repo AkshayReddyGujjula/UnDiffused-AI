@@ -204,3 +204,107 @@ export function toAiProbability(
     if (contract.aiClassIndex === null) return null;
     return dist[contract.aiClassIndex];
 }
+
+
+// ---------------------------------------------------------------------------
+// v2 detector: frozen DINOv2-small backbone + calibrated linear probe
+// ---------------------------------------------------------------------------
+
+/**
+ * The v2 contract. Unlike the two v1 checkpoints, every value here was read off
+ * the exported graph by scripts/train/export_probe_onnx.py rather than written
+ * by hand, and the model has been scored on a stated benchmark.
+ *
+ * The head emits a single logit, so there is no class-index question to get
+ * wrong: P(AI) = sigmoid(logit). Temperature scaling and the feature scaler are
+ * folded into the linear layer, so the logit is already calibrated.
+ */
+export const DETECTOR_V2: ModelContract & { singleLogit: true } = {
+    name: 'detector_v2_probe',
+    inputName: 'pixel_values',
+    outputName: 'logits',
+    numClasses: 1,
+    aiClassIndex: 0,
+    mean: IMAGENET_MEAN,
+    std: IMAGENET_STD,
+    inputSize: 224,
+    singleLogit: true,
+};
+
+/**
+ * Measured performance of DETECTOR_V2, from docs/benchmark/v2_matched_probe.json.
+ *
+ * The headline is `heldoutGeneratorAuroc`: SDXL never appeared in training, and
+ * the evaluation pairs each real photograph with a render made from that same
+ * photograph's caption, so content is held constant and only authenticity
+ * varies.
+ *
+ * `shortcutGap` is the difference between the unmatched and matched scores. An
+ * earlier model trained on mismatched corpora had a gap of 0.32 -- it was
+ * separating datasets, not detecting generation. This one is -0.008, meaning it
+ * behaves the same whether or not content is matched.
+ */
+export const DETECTOR_V2_CALIBRATION = {
+    calibrated: true,
+    testAuroc: 0.8845,
+    heldoutGeneratorAuroc: 0.9076,
+    unmatchedAuroc: 0.8768,
+    shortcutGap: -0.0077,
+    v1ShippedAuroc: 0.5,
+    benchmark: 'docs/benchmark/v2_matched_probe.json',
+} as const;
+
+/**
+ * The abstention band, chosen on a validation split against a 5% false-positive
+ * target under a 25% abstention ceiling fixed in advance.
+ *
+ * Below `low` -> likely authentic. Above `high` -> likely AI generated.
+ * Between -> inconclusive, and the extension says so rather than guessing.
+ *
+ * The measured cost is explicit: it abstains on about one image in four and
+ * catches roughly 70% of generated images among those it does rule on. Widening
+ * the band would raise precision and abstain more; narrowing it would accuse
+ * more real photographs. Wrongly calling a genuine photograph fake is the more
+ * damaging error, which is why the band is tuned to FPR rather than accuracy.
+ */
+export const ABSTENTION_BAND = {
+    low: 0.5448,
+    high: 0.8461,
+    measuredAbstainRate: 0.2493,
+    measuredFpr: 0.0488,
+    measuredTpr: 0.6979,
+} as const;
+
+export type Verdict = 'likely_authentic' | 'inconclusive' | 'likely_ai';
+
+/** Map a calibrated P(AI) to one of three states. Never a bare percentage. */
+export function toVerdict(pAi: number): Verdict {
+    if (pAi < ABSTENTION_BAND.low) return 'likely_authentic';
+    if (pAi > ABSTENTION_BAND.high) return 'likely_ai';
+    return 'inconclusive';
+}
+
+/** P(AI) from a single-logit head. */
+export function sigmoid(logit: number): number {
+    return 1 / (1 + Math.exp(-logit));
+}
+
+/**
+ * Read a [batch, 1] output into per-image AI probabilities.
+ *
+ * Shares the striding discipline of logitsToDistributions: index by
+ * `i * classCount`, never by `i`.
+ */
+export function logitsToAiProbabilities(
+    outputData: Float32Array | number[],
+    dims: readonly number[]
+): number[] {
+    if (dims.length !== 2 || dims[1] !== 1) {
+        throw new ModelContractError(
+            `detector_v2: expected a [batch, 1] output, got [${dims.join(', ')}]`
+        );
+    }
+    const out: number[] = [];
+    for (let i = 0; i < dims[0]; i++) out.push(sigmoid(Number(outputData[i])));
+    return out;
+}

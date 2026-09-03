@@ -82,3 +82,7 @@ docs/benchmark/matched_corpus.log
 docs/benchmark/features.log
 
 models/
+
+models/v2/*.onnx
+docs/benchmark/score_int8.log
+docs/benchmark/feat_matched.log

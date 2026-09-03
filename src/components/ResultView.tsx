@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 
+export type Verdict = 'likely_authentic' | 'inconclusive' | 'likely_ai';
+
 export interface ScanResult {
     status?: 'ok' | 'model_unavailable';
     modelCalibrated?: boolean;
     unavailableReason?: string;
     benchmarkReference?: string;
+    verdict?: Verdict;
+    abstentionBand?: { low: number; high: number };
+    measuredAuroc?: number;
     isAI: boolean | null;
     confidence: number | null;
     heatmapData?: number[];
@@ -60,12 +65,10 @@ export const ResultView: React.FC<ResultViewProps> = ({
     };
 
     const getResultDisplay = () => {
-        const { isAI, confidence } = result;
+        const { isAI, confidence, verdict } = result;
 
-        // The models were measured against 100 labelled images and scored at
-        // chance (docs/benchmark/v1_baseline.json). Until a calibrated model
-        // ships, there is no verdict to show -- only the forensic evidence.
-        // Rendering a percentage here would be inventing a number.
+        // No calibrated model behind the number -> no verdict. Rendering a
+        // percentage from a model measured at chance would be inventing one.
         if (result.status === 'model_unavailable' || isAI === null || confidence === null) {
             return {
                 label: "No model verdict",
@@ -76,51 +79,34 @@ export const ResultView: React.FC<ResultViewProps> = ({
             };
         }
 
-        if (confidence < 66) {
+        // Three states, not a percentage. The middle one is a real answer: the
+        // band is tuned so that ruling on an image implies a ~5% false-positive
+        // rate, and the cost is abstaining on about one image in four.
+        if (verdict === 'likely_ai') {
             return {
-                label: "Inconclusive",
-                containerClass: "bg-white/10 border border-white/20",
-                dotClass: "bg-white",
-                textClass: "text-white",
-                barClass: "bg-white"
-            };
-        }
-
-        if (isAI) {
-            if (confidence >= 90) {
-                return {
-                    label: "AI Generated",
-                    containerClass: "bg-red-500/20 border border-red-500/30",
-                    dotClass: "bg-red-400",
-                    textClass: "text-red-400",
-                    barClass: "bg-red-500"
-                };
-            }
-            return {
-                label: "Likely AI Generated",
+                label: "Likely AI generated",
                 containerClass: "bg-red-500/20 border border-red-500/30",
                 dotClass: "bg-red-400",
                 textClass: "text-red-400",
                 barClass: "bg-red-500"
             };
-        } else {
-            if (confidence >= 90) {
-                return {
-                    label: "Real Image",
-                    containerClass: "bg-green-500/20 border border-green-500/30",
-                    dotClass: "bg-green-400",
-                    textClass: "text-green-400",
-                    barClass: "bg-green-500"
-                };
-            }
+        }
+        if (verdict === 'likely_authentic') {
             return {
-                label: "Likely a Real Image",
+                label: "Likely authentic",
                 containerClass: "bg-green-500/20 border border-green-500/30",
                 dotClass: "bg-green-400",
                 textClass: "text-green-400",
                 barClass: "bg-green-500"
             };
         }
+        return {
+            label: "Inconclusive",
+            containerClass: "bg-amber-400/15 border border-amber-400/30",
+            dotClass: "bg-amber-300",
+            textClass: "text-amber-300",
+            barClass: "bg-amber-400"
+        };
     };
 
     const display = getResultDisplay();
