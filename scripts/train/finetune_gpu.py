@@ -203,6 +203,8 @@ def main():
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--out", type=Path, default=Path("models/v2"))
     ap.add_argument("--no-amp", action="store_true")
+    ap.add_argument("--limit-pairs", type=int, default=0,
+                    help="smoke test: cap pairs per split (0 = use everything)")
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -218,6 +220,12 @@ def main():
     manifest = json.loads(
         (args.corpus / "manifest.json").read_text(encoding="utf-8"))
     splits = build_splits(manifest, args.heldout_generator)
+
+    if args.limit_pairs:
+        # Smoke path: exercise every stage of the pipeline in a couple of
+        # minutes so a crash surfaces before a long unattended run, not during.
+        splits = {k: v[: args.limit_pairs * 2] for k, v in splits.items()}
+        print("SMOKE TEST: capped at {} pairs per split".format(args.limit_pairs))
     for k, v in splits.items():
         n_ai = sum(1 for r in v if r["label_int"] == 1)
         print("  {:<14s} {:>5d}  ({} ai / {} real)".format(

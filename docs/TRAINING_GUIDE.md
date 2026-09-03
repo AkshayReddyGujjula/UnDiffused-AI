@@ -128,6 +128,19 @@ and they're the real ones.
 
 ## Step 4 — Train
 
+**First, a 2-minute smoke test.** This runs every stage of the pipeline on a
+tiny subset so any crash happens now rather than 40 minutes into a real run:
+
+```bash
+python scripts/train/finetune_gpu.py --limit-pairs 24 --epochs 2 --batch-size 8 --out models/_smoketest
+```
+
+It should print two epochs and `Checkpoint: models\_smoketest\detector_best.pt`.
+If it does, delete that folder and continue. If it errors, stop and send me the
+message — do not start the real run.
+
+Then the real thing:
+
 ```bash
 python scripts/train/finetune_gpu.py --epochs 8 --batch-size 16
 ```
@@ -192,6 +205,22 @@ export verified
 That number must be small. If it prints `EXPORT VERIFICATION FAILED`, stop and
 tell me — do not ship that file.
 
+You may also see:
+
+```
+QUANT_WARN: int8 diverges from fp32 by 0.486 on probe tensors.
+```
+
+**This is not a failure, but do not ignore it.** Compressing to int8 changes the
+model's answers slightly, and that warning says the change is not tiny. It is
+measured on random tensors, which exaggerates it — the shipped probe warned too
+and still scored 0.894. The point is that you have to *check* rather than
+assume, which is Step 6.
+
+The export also now refuses to write a file containing `ConvInteger`, an
+operation that works in Python and does not exist in the browser's runtime. That
+bug shipped once already.
+
 It writes into `public/models/`:
 - `detector_v2.onnx` — full size
 - `detector_v2_int8.onnx` — compressed, roughly 4× smaller
@@ -212,6 +241,20 @@ happens when an image is re-compressed, resized, or screenshotted) and writes
 `docs/benchmark/v2_results.json`.
 
 **This is the number that goes in your CV, not the training-screen number.**
+
+Compare the int8 result against the current shipped model: **0.894 AUROC** on
+`matched_control_v1`. If your fine-tuned int8 model scores lower, keep the
+existing one — a fine-tune that loses to a frozen linear probe is a legitimate
+result to report, not a failure to hide.
+
+Then confirm it actually runs in a browser, which Python cannot tell you:
+
+```bash
+python -m http.server 8899
+```
+
+Open `http://127.0.0.1:8899/scripts/verify/browser_check.html` and look for
+`BROWSER_CHECK_PASS`.
 
 ---
 

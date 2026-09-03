@@ -47,6 +47,24 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from transformers import AutoModel
 
+# Ops with no kernel in onnxruntime-web's WASM backend. A model containing any
+# of these loads fine under Python onnxruntime and fails outright in the
+# browser, which is how a broken build shipped once already.
+WASM_UNSUPPORTED_OPS = {"ConvInteger"}
+
+
+def assert_browser_compatible(path):
+    """Fail loudly if the graph cannot run in the extension's runtime."""
+    import onnx
+    ops = {n.op_type for n in onnx.load(str(path)).graph.node}
+    bad = ops & WASM_UNSUPPORTED_OPS
+    if bad:
+        raise SystemExit(
+            "{} contains {}, which onnxruntime-web's WASM backend cannot "
+            "execute. The model would load under Python and fail in the "
+            "browser. Do not ship this file.".format(path.name, sorted(bad)))
+
+
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 HELDOUT = "stabilityai/stable-diffusion-xl-base-1.0"
@@ -232,6 +250,7 @@ def main():
             # scripts/verify/browser_check.html.
             quantize_dynamic(str(fp32), str(q), weight_type=QuantType.QInt8,
                              op_types_to_quantize=["MatMul"])
+            assert_browser_compatible(q)
             qs = ort.InferenceSession(str(q), providers=["CPUExecutionProvider"])
             q_out = np.asarray(qs.run([qs.get_outputs()[0].name],
                                       {qs.get_inputs()[0].name: pix.numpy()})[0]
@@ -243,6 +262,11 @@ def main():
                 "max_abs_divergence_vs_pytorch": float(np.max(np.abs(t_out - q_out))),
                 "note": "Lossy. Score this file on the benchmark before shipping it.",
             }
+            if q_div > 0.05:
+                print("  QUANT_WARN: int8 diverges from fp32 by {:.3f} on probe "
+                      "tensors. Score the int8 file with scripts/bench/"
+                      "score_model.py before shipping it -- do not assume "
+                      "quantization was free.".format(q_div))
             print("quantized {:.1f} MB ({:.1f}x smaller)".format(
                 q.stat().st_size / 1e6, meta["quantized"]["compression_vs_fp32"]))
         except Exception as exc:

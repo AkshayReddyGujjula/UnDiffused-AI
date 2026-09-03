@@ -41,6 +41,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from finetune_gpu import Detector, IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 
 
+# Ops with no kernel in onnxruntime-web's WASM backend. A model containing any
+# of these loads fine under Python onnxruntime and fails outright in the
+# browser, which is how a broken build shipped once already.
+WASM_UNSUPPORTED_OPS = {"ConvInteger"}
+
+
+def assert_browser_compatible(path):
+    """Fail loudly if the graph cannot run in the extension's runtime."""
+    import onnx
+    ops = {n.op_type for n in onnx.load(str(path)).graph.node}
+    bad = ops & WASM_UNSUPPORTED_OPS
+    if bad:
+        raise SystemExit(
+            "{} contains {}, which onnxruntime-web's WASM backend cannot "
+            "execute. The model would load under Python and fail in the "
+            "browser. Do not ship this file.".format(path.name, sorted(bad)))
+
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", type=Path,
@@ -104,6 +123,8 @@ def main():
     print("exported {} ({:.1f} MB, {} exporter)".format(
         fp32_path.name, fp32_path.stat().st_size / 1e6, exporter))
 
+    assert_browser_compatible(fp32_path)
+
     import onnxruntime as ort
     sess = ort.InferenceSession(str(fp32_path), providers=["CPUExecutionProvider"])
     inp, out = sess.get_inputs()[0], sess.get_outputs()[0]
@@ -153,8 +174,15 @@ def main():
         try:
             from onnxruntime.quantization import quantize_dynamic, QuantType
             q_path = args.out_dir / "{}_int8.onnx".format(args.name)
+            # MatMul only. Quantizing Conv emits ConvInteger, for which
+            # onnxruntime-web's WASM backend has no kernel -- the file loads
+            # under Python onnxruntime and then fails at session creation in
+            # the browser. The patch-embedding Conv is small, so leaving it in
+            # fp32 costs well under a megabyte.
             quantize_dynamic(str(fp32_path), str(q_path),
-                             weight_type=QuantType.QInt8)
+                             weight_type=QuantType.QInt8,
+                             op_types_to_quantize=["MatMul"])
+            assert_browser_compatible(q_path)
             q_sess = ort.InferenceSession(str(q_path),
                                           providers=["CPUExecutionProvider"])
             q_out = np.asarray(q_sess.run(
