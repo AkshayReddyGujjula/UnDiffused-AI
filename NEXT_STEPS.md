@@ -99,17 +99,18 @@ bug that every Python check missed.
 
 Worth knowing before you talk about this, because someone will ask.
 
-- **The GPU fine-tune has never been run.** `scripts/train/finetune_gpu.py` is
-  written and its data path is exercised, but no training run has completed. If
-  it errors on first use, that is why.
+- **The GPU fine-tune has now been smoke-tested** end to end on CPU (24 pairs,
+  2 epochs): loss falls, val AUROC rises, checkpoint and report are written, and
+  the ONNX export succeeds and passes the browser-compatibility gate. It has
+  still never run at full scale on a GPU, so treat the first real run as the
+  first real run. Step 4 of the training guide starts with a 2-minute smoke test
+  for exactly this reason.
 - **The "real" half of the matched corpus is LAION web imagery** — includes
   graphics, product shots and screenshots, not a clean photographic corpus. It
   makes the score conservative rather than inflated, but it is not ideal.
 - **Four generator families, all open-source diffusion.** No Midjourney, no
   Firefly. Cross-family generalisation beyond diffusion is untested.
 - **The 25% abstention rate is a real cost**, not a rhetorical flourish.
-- **`docs/benchmark/v2_results.json` may be mid-write** — a scoring run was in
-  flight. Re-run `score_model.py` if it looks truncated.
 - **Dead code remains**: `src/offscreen/` is bundled but never instantiated and
   references a model file that does not exist. The audit flagged it; it is still
   there.

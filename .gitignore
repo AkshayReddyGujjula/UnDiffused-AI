@@ -89,3 +89,5 @@ docs/benchmark/feat_matched.log
 
 docs/benchmark/score_v2.log
 scripts/verify/cases.js
+
+scripts/verify/contract.mjs

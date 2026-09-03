@@ -190,8 +190,12 @@ than `test` — that's normal and honest.
 ## Step 5 — Convert the model for the browser extension
 
 ```bash
-python scripts/train/export_onnx.py --checkpoint models/v2/detector_best.pt --quantize
+python scripts/train/export_onnx.py --checkpoint models/v2/detector_best.pt --name detector_v2_finetuned --quantize
 ```
+
+Note the `--name`. It exports under a **new** name rather than overwriting the
+model the extension currently uses, so if the fine-tune turns out worse you
+still have a working extension. Swapping happens in Step 6, and only if it wins.
 
 This converts the model to ONNX (the format the extension runs), makes a
 compressed int8 version, and **checks the conversion didn't change the model's
@@ -222,23 +226,29 @@ operation that works in Python and does not exist in the browser's runtime. That
 bug shipped once already.
 
 It writes into `public/models/`:
-- `detector_v2.onnx` — full size
-- `detector_v2_int8.onnx` — compressed, roughly 4× smaller
-- `detector_v2_meta.json` — the model's specification, **read from the actual
-  file rather than typed by hand.** The old project got this wrong and it's how
-  the original bug survived.
+- `detector_v2_finetuned.onnx` — full size
+- `detector_v2_finetuned_int8.onnx` — compressed, roughly 4× smaller
+- `detector_v2_finetuned_meta.json` — the model's specification, **read from the
+  actual file rather than typed by hand.** The old project got this wrong and
+  it's how the original bug survived.
 
 ---
 
 ## Step 6 — Score it properly
 
 ```bash
-python scripts/bench/score_model.py --model public/models/detector_v2.onnx --meta public/models/detector_v2_meta.json
+cd scripts/bench
+python score_model.py --model ../../public/models/detector_v2_finetuned_int8.onnx --meta ../../public/models/detector_v2_finetuned_meta.json --out ../../docs/benchmark/v2_finetuned_results.json
+cd ../..
 ```
 
+Score the **int8** file, because that is the one that ships. Scoring the fp32
+one tells you about a file nobody will run.
+
 This runs the model against the benchmark, including the laundering tests (what
-happens when an image is re-compressed, resized, or screenshotted) and writes
-`docs/benchmark/v2_results.json`.
+happens when an image is re-compressed, resized, or screenshotted).
+
+It takes about 15 minutes.
 
 **This is the number that goes in your CV, not the training-screen number.**
 
@@ -255,6 +265,28 @@ python -m http.server 8899
 
 Open `http://127.0.0.1:8899/scripts/verify/browser_check.html` and look for
 `BROWSER_CHECK_PASS`.
+
+> That page has the current model's filename written into it. To test the
+> fine-tuned one, open `scripts/verify/browser_check.html` in a text editor and
+> change `detector_v2_probe_int8.onnx` to `detector_v2_finetuned_int8.onnx` in
+> the two places it appears.
+
+### Only if it won — swap it in
+
+The extension loads a fixed filename, so a better model does nothing until you
+put it in that slot:
+
+```bash
+cp public/models/detector_v2_finetuned_int8.onnx public/models/detector_v2_probe_int8.onnx
+cp public/models/detector_v2_finetuned_meta.json public/models/detector_v2_probe_meta.json
+npm run build
+```
+
+Reload the extension at `chrome://extensions` and scan an image to confirm it
+still works.
+
+**If it lost, do nothing.** The current model stays, and you have a measured
+comparison to talk about — which is worth more than a marginal gain.
 
 ---
 

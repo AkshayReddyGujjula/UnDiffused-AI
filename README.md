@@ -210,8 +210,9 @@ Specific limits of the numbers here:
   conservative — label noise depresses the score — but it is not a clean
   photographic corpus.
 - **A 25% abstention rate is real cost.** One image in four gets no answer.
-- **~0.4–1.8 s per image** single-threaded WASM, plus a one-off session
-  initialisation of roughly 30 s.
+- **~0.7–0.9 s per image** single-threaded WASM, measured in-browser, plus a
+  one-off session initialisation of ~1.4 s warm (up to ~30 s on a cold cache
+  while the 25 MB graph is fetched and optimised).
 - **No C2PA verification yet.** Where provenance exists it should be read
   deterministically instead of estimated.
 

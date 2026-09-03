@@ -27,6 +27,8 @@ import {
     logitsToDistributions,
     toAiProbability,
     assertOutputShape,
+    logitsToAiProbabilities,
+    sigmoid,
 } from './bundle.mjs';
 
 const GLOBAL = MODEL_CONTRACTS.global;
@@ -142,4 +144,40 @@ test('contracts match the shipped ONNX graphs', () => {
     assert.equal(LOCAL.numClasses, 2);
     assert.deepEqual([...GLOBAL.mean], [0.485, 0.456, 0.406]);
     assert.deepEqual([...GLOBAL.std], [0.229, 0.224, 0.225]);
+});
+
+// --- detector_v2 single-logit head -----------------------------------------
+// The exported head ends in .squeeze(-1), so ONNX reports [batch], not
+// [batch, 1]. Requiring rank 2 threw ModelContractError on every scan, and the
+// in-page harness missed it by reading the raw output buffer directly instead
+// of going through this parser. These pin both accepted shapes.
+
+test('rank-1 [batch] output is accepted (the shape the model actually emits)', () => {
+    const p = logitsToAiProbabilities(new Float32Array([0, 2, -2]), [3]);
+    assert.equal(p.length, 3);
+    assert.ok(Math.abs(p[0] - 0.5) < 1e-12);
+    assert.ok(p[1] > 0.85 && p[2] < 0.15);
+});
+
+test('rank-2 [batch, 1] output is also accepted', () => {
+    const a = logitsToAiProbabilities(new Float32Array([0, 2, -2]), [3, 1]);
+    const b = logitsToAiProbabilities(new Float32Array([0, 2, -2]), [3]);
+    a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-12));
+});
+
+test('a multi-class shape is rejected rather than silently misread', () => {
+    assert.throws(() => logitsToAiProbabilities(new Float32Array([1, 2, 3, 4]), [2, 2]),
+                  ModelContractError);
+    assert.throws(() => logitsToAiProbabilities(new Float32Array([1]), [1, 1, 1]),
+                  ModelContractError);
+});
+
+test('a short output buffer throws instead of reading undefined', () => {
+    assert.throws(() => logitsToAiProbabilities(new Float32Array([1]), [4]),
+                  ModelContractError);
+});
+
+test('sigmoid maps a logit to P(AI) and is monotonic', () => {
+    assert.ok(Math.abs(sigmoid(0) - 0.5) < 1e-12);
+    assert.ok(sigmoid(3) > sigmoid(1) && sigmoid(1) > sigmoid(-1));
 });

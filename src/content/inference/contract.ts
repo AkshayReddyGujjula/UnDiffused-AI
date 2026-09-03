@@ -299,12 +299,29 @@ export function logitsToAiProbabilities(
     outputData: Float32Array | number[],
     dims: readonly number[]
 ): number[] {
-    if (dims.length !== 2 || dims[1] !== 1) {
+    // The exported head ends in .squeeze(-1), so ONNX reports the output as
+    // rank-1 [batch] rather than rank-2 [batch, 1]. Both are accepted: they
+    // carry one logit per image either way, and rejecting the rank-1 form threw
+    // ModelContractError on every scan while an in-page harness that read the
+    // raw buffer still looked fine.
+    const isRank1 = dims.length === 1;
+    const isRank2Single = dims.length === 2 && dims[1] === 1;
+
+    if (!isRank1 && !isRank2Single) {
         throw new ModelContractError(
-            `detector_v2: expected a [batch, 1] output, got [${dims.join(', ')}]`
+            `detector_v2: expected [batch] or [batch, 1], got [${dims.join(', ')}]`
         );
     }
+
+    const batch = dims[0];
+    if (outputData.length < batch) {
+        throw new ModelContractError(
+            `detector_v2: output buffer holds ${outputData.length} values for a ` +
+            `batch of ${batch}`
+        );
+    }
+
     const out: number[] = [];
-    for (let i = 0; i < dims[0]; i++) out.push(sigmoid(Number(outputData[i])));
+    for (let i = 0; i < batch; i++) out.push(sigmoid(Number(outputData[i])));
     return out;
 }
