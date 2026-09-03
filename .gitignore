@@ -81,7 +81,6 @@ docs/benchmark/matched_corpus_v1/ai/
 docs/benchmark/matched_corpus.log
 docs/benchmark/features.log
 
-models/
 
 models/v2/*.onnx
 docs/benchmark/score_int8.log
@@ -91,3 +90,9 @@ docs/benchmark/score_v2.log
 scripts/verify/cases.js
 
 scripts/verify/contract.mjs
+
+# fp32 exports and training checkpoints: large and regenerable from
+# scripts/train/. Anchored with a leading slash so this cannot shadow
+# public/models/, which holds the model the extension actually ships.
+/models/v2/
+/models/_smoketest/
