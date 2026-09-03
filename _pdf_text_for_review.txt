@@ -1,0 +1,1828 @@
+
+--- PAGE 1 ---
+UnDiffused
+Detecting AI-generated images on-device, and the measurements that decided
+how.
+A complete technical account: what the system does, how every part of it works, and the decision behind
+each one, in the order the decisions were actually made.
+Akshay Reddy Gujjula
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Branch stage1-baseline, 3 September 2026
+The short version. I shipped a Chrome extension that claimed to detect AI-generated images. Seven months
+later I measured it properly and found it detected nothing at all: 0.50 AUROC, zero of fifty generated images
+caught. I rebuilt it. The first rebuild scored 0.99 and I threw it away, because I could show it had learned which
+dataset an image came from rather than whether it was generated. The version that ships scores 0.954 on
+content-matched pairs, abstains on 14% of images, and states a false-positive rate of 6.88% rather than the
+5% it was tuned for, because 6.88% is what it measured on data it had never seen.
+
+
+--- PAGE 2 ---
+UnDiffused: a technical account
+On-device AI image detection
+2
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Contents
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 5
+1. What this is
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 5
+1.1 The product
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 5
+1.2 The headline result
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 5
+1.3 What AUROC means here, and why the corpus matters more
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 5
+1.4 How to read the rest of this
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 6
+2. How it was built, in order
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 6
+2.1 Phase one: building the thing (February 2026)
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 6
+2.2 Phase two begins: the audit (2 September 2026)
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 10
+3. How the running system works
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 10
+3.1 The three execution contexts
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 10
+3.2 End to end, step by step
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 11
+3.3 Saliency and adaptive crops
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 11
+3.4 contract.ts, the spine
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 12
+3.5 The forensic toolkit
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 13
+4. The model
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 13
+4.1 Architecture
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 13
+4.2 Why a frozen probe first
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 13
+4.3 Training the fine-tune
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 14
+4.4 Export, and the operator that does not exist in a browser
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 14
+4.5 Metadata generated from the artifact, never typed
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 14
+4.6 Calibration
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 15
+4.7 The abstention band, and the number I chose to publish
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 15
+4.8 Failing loudly
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 16
+5. Evaluation
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 16
+5.1 The protocol is fixed and versioned
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 16
+5.2 The four corpora
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 16
+5.3 The laundering suite
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 17
+5.4 Per-generator
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 17
+5.5 Every recorded result file
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 18
+5.6 Cross-implementation verification
+
+
+--- PAGE 3 ---
+UnDiffused: a technical account
+On-device AI image detection
+3
+github.com/AkshayReddyGujjula/UnDiffused-AI
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 19
+6. The repository, file by file
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 19
+6.1 Extension runtime
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 19
+6.2 User interface
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 20
+6.3 Evaluation and training scripts
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 21
+6.4 Tests
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 21
+6.5 What was deleted in the final pass, and why
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 22
+7. Security model
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 22
+7.1 The threat
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 22
+7.2 What the guard does
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 22
+7.3 Redirects, and the residual risk
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 22
+7.4 The rest of the model
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+8. Limitations, and what I would do next
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+8.1 What this does not do
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+8.2 Known weaknesses in the repository itself
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 24
+8.3 What I would do next, in order of value
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 25
+8.4 The thing worth taking away
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 26
+Appendix A. Commands and numbers
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 26
+A.1 Reproduce the model
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 26
+A.2 Build and verify the extension
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 26
+A.3 Every headline number
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 27
+A.4 Repository
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 28
+Appendix B. Every tracked file
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 28
+Root and configuration
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 28
+Extension source: inference
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 28
+Extension source: content script and background
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 29
+Extension source: interface
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 30
+Extension source: other
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 30
+Tests
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 30
+Scripts: evaluation
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+Scripts: training and export
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+Scripts: verification
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 31
+Documentation and recorded results
+
+
+--- PAGE 4 ---
+UnDiffused: a technical account
+On-device AI image detection
+4
+github.com/AkshayReddyGujjula/UnDiffused-AI
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 32
+Shipped assets
+ .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . 32
+Archived v1 models
+
+
+--- PAGE 5 ---
+UnDiffused: a technical account
+On-device AI image detection
+5
+github.com/AkshayReddyGujjula/UnDiffused-AI
+1. What this is
+The claim, the evidence for it, and how to read the numbers.
+1.1 The product
+UnDiffused is a Chrome extension (Manifest V3). You right-click any image on any page and choose Scan
+with UnDiffused. Roughly one second later a panel appears over the page with one of three verdicts: likely
+authentic, likely AI generated, or inconclusive. Alongside the verdict sits a forensic toolkit of ten classical
+image-analysis tools, and a heatmap showing which regions of the image the model reacted to.
+Everything runs on the machine. The neural network is a 24.9 MB ONNX file bundled inside the extension
+and executed by onnxruntime-web on WebAssembly. No image, score or verdict is transmitted anywhere.
+There is no server, no telemetry and no analytics.
+1.2 The headline result
+Version
+Model
+Content-matched
+AUROC
+Status
+v1
+2 x ViT-B/16, 174 MB
+0.50
+Caught 0 of 50 generated images
+v2 probe
+DINOv2-S/14, frozen, linear probe
+0.894
+Superseded
+v2 fine-tune
+DINOv2-S/14, last blocks unfrozen
+0.954
+Shipping
+All three scored on the same 800-image external set, with the same script.
+1.3 What AUROC means here, and why the corpus matters more
+AUROC is the probability that the model assigns a higher suspicion score to a randomly chosen generated
+image than to a randomly chosen real one. 0.5 is a coin flip. 1.0 is perfect. It is rank-based, which has one
+consequence that runs through this entire document: AUROC is invariant to any monotonic rescaling of
+the scores. Calibration cannot change it, and a good AUROC tells you nothing about whether the
+probabilities the user sees are meaningful.
+The number is only as honest as the set it is measured on. Every v2 figure here is measured on
+content-matched pairs: each real photograph is paired with an AI image generated from that same
+photograph's caption. Subject matter is held constant, so the only thing that varies is authenticity. Section 2.4
+is the story of why I had to build that, and it is the most important section in this document.
+1.4 How to read the rest of this
+ Section 2 is chronological: every significant decision in the order it was made, with the commit that carries
+it and what it cost.
+ Section 3 is how the running system works, traced end to end.
+ Section 4 is the model: architecture, training, export, quantization and calibration.
+ Section 5 is the evaluation methodology and every recorded result.
+ Section 6 is a file-by-file reference to the whole repository.
+ Section 7 is the security model of the one privileged component.
+ Section 8 states the limitations plainly, and what I would do next.
+
+
+--- PAGE 6 ---
+UnDiffused: a technical account
+On-device AI image detection
+6
+github.com/AkshayReddyGujjula/UnDiffused-AI
+2. How it was built, in order
+Ninety-four commits across two phases, seven months apart. The decisions that mattered, and the ones
+that were wrong.
+The repository has two clearly separated phases. Between 6 and 14 February 2026 I built the extension and
+trained models for it. On 2 September 2026 I came back to it, audited it, and found the central claim was false.
+Everything after that date is the rebuild.
+2.1 Phase one: building the thing (February 2026)
+The first phase is 34 commits and produced a working, attractive extension. In order, it added: the extension
+scaffold and rename from AI-Image-Checker (0d48b9a, f496a88); a first ONNX model (0a06dac); a heatmap
+overlay (5131b69); a high-pass filter and movable windows; several rounds of retraining logged as Epoch 1,
+Epoch 2, Epoch 5, Epoch 10; a reverse image search; and then the forensic tools panel with its sliders,
+fullscreen, zoom and download controls (983eda6 onward).
+Two commits at the end of that phase set up everything that followed. 78c5ecd swapped in a quantized
+Swin-Tiny ONNX model, and f4b7ba4 introduced a dual model architecture: a three-class global model and a
+two-class local model, their outputs blended 25/75, with an early-exit gate that skipped the local model when
+the global score was extreme.
+The decision I would take back. Neither model was ever measured. There was no benchmark, no held-out
+set, no label map recorded, and no note of which output index meant AI. The code contained a comment
+agonising over whether index 0 or index 1 was the AI class. That comment sat there for seven months. It was
+arguing about a coin with no faces.
+2.2 Phase two begins: the audit (2 September 2026)
+I wrote a technical audit of my own project (172ecb2), then revised it twice after criticism (f31676f, 1ff9e89).
+The audit predicted one of two outcomes: either the detector worked and I would finally learn which class
+index meant AI, or it was inverted and had been calling photographs fake for its whole existence.
+Neither happened.
+Stage 1: measure the shipped checkpoints (91b562a)
+I built a 100-image labelled set: 50 COCO val2017 photographs, chosen because the corpus predates public
+diffusion models so authenticity is established by collection date rather than by my judgement, and 50
+ELSA_D3 renders spanning four generator families. Then I ran both checkpoints over it and bootstrapped
+confidence intervals.
+Model
+Index
+AUROC
+95% CI
+Reading
+global (3-class)
+0
+0.540
+0.425 to 0.655
+chance
+global
+1
+0.437
+0.324 to 0.554
+chance
+global
+2
+0.495
+0.390 to 0.606
+chance
+local (2-class)
+0
+0.520
+0.408 to 0.628
+chance
+local
+1
+0.480
+0.373 to 0.594
+chance
+Every interval contains 0.5. There is no AI class to identify, because no index carries signal to identify it with.
+
+
+--- PAGE 7 ---
+UnDiffused: a technical account
+On-device AI image detection
+7
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Through the extension's real path the pipeline caught 0 of 50 generated images and flagged 1 of 50
+photographs, an accuracy of 0.490 achieved by calling almost everything real. The mechanism was visible in
+the score distribution: the final probability was squeezed between 0.221 and 0.655 with a standard deviation
+of 0.052, so it almost never crossed the hardcoded 0.5 threshold. The number on screen moved, which made
+it look alive, but it moved inside a range that could barely produce a positive verdict.
+The decision: rule out my own preprocessing before blaming the model
+A chance result is worthless if it comes from feeding the model the wrong input, and there was a specific
+reason for suspicion. The tensors are named pixel_values and logits, which is HuggingFace convention,
+and HuggingFace's default ViT processor normalises with mean and standard deviation both 0.5 rather than
+with ImageNet statistics. The extension used ImageNet statistics.
+So I swept 5 normalisations by 2 resize policies by 5 class indices, which is 50 measurements. The strongest
+separation found anywhere was AUROC 0.341: that is 0.159 from chance, and in the inverted direction.
+Across 50 measurements on 100 images, a maximum deviation of that size is what noise produces. No
+preprocessing recovered a detector.
+Stage 1b: fix the parsing bug, and report that fixing it did nothing (523f007)
+There was a real bug. The output parser handled only the one-class and two-class cases. The three-class
+global model fell through to a branch that indexed outputData[i] for batch item i, which is correct only when
+there is exactly one class. With three classes and a batch of four quadrants it read flat positions 0, 1, 2, 3: the
+first quadrant's three class logits followed by the second quadrant's first logit, mixing values across both the
+class and the batch axis, then pushed the result through a sigmoid as though it were a binary logit.
+Fixing it moved AUROC from 0.472 to 0.445. Slightly worse. Both numbers are noise and so is their
+difference. The bug was concealing an absence, not a capability. I wrote that down as the headline of the
+stage-1 note rather than quietly reporting the bug fix as an improvement, because the honest reading is the
+whole point: the parsing defect was real and unambiguously wrong, and repairing it recovered nothing,
+because there was no signal underneath it to recover.
+The same commit introduced contract.ts, which asserts the tensor contract at load time and throws rather
+than degrading. That file is now the spine of the project and Section 3.4 covers it in full.
+Two corrections to my own audit
+Running the code rather than reading it overturned one of my predictions and sharpened another. I had
+warned that the early-exit gate would skip the local model and report raw noise; measured early-exit rate was
+0.00 across all 100 images, because the buggy global score never left the mid-range that keeps the gate
+open. The gate was still bad design, but it was not causing harm, and my audit had overstated it. I also could
+not explain the global head's third class; measurement showed it was the argmax for 0 of 50 real and 1 of 50
+generated images, with mean probability 0.255 against a uniform 0.333. Not mysterious, just inert.
+Stage 2: build the tests that could catch a fake win (c5dfb9b)
+Before training a replacement I built the machinery to disbelieve it: a laundering suite (JPEG at three qualities,
+double JPEG, WebP, a resize chain, a screenshot simulation, and a 512px q90 normalisation that removes
+resolution and compression as a shortcut), a held-out generator split, and a confound control. This ordering
+was deliberate. Building the evaluation after seeing the result is how you build an evaluation that agrees with
+the result.
+Stage 3: the first rebuild scores 0.99, and I do not believe it (1075618)
+
+
+--- PAGE 8 ---
+UnDiffused: a technical account
+On-device AI image detection
+8
+github.com/AkshayReddyGujjula/UnDiffused-AI
+I replaced the two opaque checkpoints with a frozen DINOv2-S/14 backbone and a linear probe on its
+mean-pooled patch tokens. It scored 0.975 on an in-distribution test split and 0.990 on SDXL, a generator
+held out of training entirely. By the standard practice in the literature, that is a solved problem.
+The tell was in the laundering suite. The score held flat under JPEG q30 and under screenshot simulation.
+Generation artifacts are high-frequency and should degrade under recompression. Semantic content does
+not. A detector that is completely indifferent to having its high frequencies destroyed is probably not using
+them.
+The training data was COCO photographs against ELSA renders. COCO is everyday scenes. ELSA prompts
+come from LAION web alt-text, so its renders skew to product shots, posters and badges. The model had
+learned which dataset an image came from.
+Why the held-out generator test could not catch this. It holds out the generator while leaving the corpus
+seam intact. Every ELSA render still looks like an ELSA render regardless of which model drew it, so the
+shortcut transfers perfectly to the held-out generator and gets certified at 0.990. A generator holdout tests
+generalisation across generators. It does not test whether you are detecting generation at all.
+Stage 3b: build the control that can detect the shortcut
+I built a content-matched corpus: 4,000 pairs, each one a real photograph together with an AI image
+generated from that photograph's own caption. Same subject, same scene description, one real and one
+generated. On that set the 0.990 model scored 0.659.
+Trained on
+Unmatched AUROC
+Content-matched AUROC
+Gap
+Mismatched corpora
+0.980
+0.659
+0.32
+Content-matched pairs
+0.877
+0.884
+-0.008
+Same backbone, same head, same hyperparameters. The training data alone decided whether it learned the shortcut or the
+signal.
+Stage 4: retrain on matched pairs (33524b7)
+0.884 AUROC, and the shortcut gap closes to -0.008, meaning the model behaves the same whether or not
+content is matched. This is a much less impressive number than 0.990 and it is the first one I believed.
+Accepting a 0.884 over a 0.990 was the single most consequential decision in the project.
+Stage 5: ship it, and discover Python proves nothing about browsers (04728ad, a29cb11)
+The int8 export scored 0.894 under Python onnxruntime and then refused to load in a browser at all:
+Could not find an implementation for ConvInteger(10) node with name
+'/trunk/embeddings/patch_embeddings/projection/Conv_quant'
+quantize_dynamic quantizes Conv as well as MatMul, and the WASM backend of onnxruntime-web has a
+MatMulInteger kernel but no ConvInteger kernel. Every Python-side check passed. The fix is to quantize
+MatMul only, leaving the patch-embedding Conv in fp32 at a cost of 0.7 MB. Both exporters now refuse to
+write a file containing an operator the browser runtime cannot execute, and
+scripts/verify/browser_check.html runs the shipped file under the real runtime.
+Stage 5b: the verification that verified nothing (bacb767)
+The browser check passed while the extension threw on every single scan. The exported head ends in
+.squeeze(-1), so ONNX reports the output as rank-1 [batch]. The parser required rank-2 and raised
+
+
+--- PAGE 9 ---
+UnDiffused: a technical account
+On-device AI image detection
+9
+github.com/AkshayReddyGujjula/UnDiffused-AI
+ModelContractError every time. The harness missed it because it read the raw output buffer directly instead
+of calling the parser, so it was carefully verifying the runtime and the weights while stepping around the one
+piece of code most likely to be wrong.
+The rule I took from this. A test that reimplements the code path it is testing is not a test of that code path.
+The harness now imports the real contract module, which is also why the abstention thresholds are no longer
+duplicated inside it.
+Interlude: the right-click that did nothing (b3056f8, 65d9b53)
+Two separate Chrome behaviours, both silent. First, manifest-declared content scripts inject only on page
+load, so any tab already open when the extension was installed had no content script and the message went
+nowhere; the background worker now injects on demand via chrome.scripting. Second, the message
+listener was declared async, and Chrome keeps a message port open only for a literal true return value; an
+async function returns a Promise, which is truthy in JavaScript but is not true, so the port closed and
+sendMessage rejected even when the scan succeeded. Scan requests are now buffered at module scope and
+replayed when React mounts, and both the ping and the scan are pinned to frameId: 0 so an advertising
+iframe cannot answer on behalf of the page.
+Stage 6: the GPU fine-tune (1ec0383, 6ca8131)
+Training moved to a desktop with a GTX 1660 Ti. Unfreezing the last transformer blocks of the DINOv2 trunk,
+8 epochs at roughly 4.3 minutes each, best epoch 5 saved automatically. Validation AUROC 0.9696, test
+0.9602, held-out SDXL 0.9720. After int8 export it scored 0.9543 on the external matched control against the
+frozen probe's 0.894.
+One trap paid for along the way: the PyTorch CUDA index. cu121 has no Python 3.14 wheels and fails with
+Could not find a version that satisfies the requirement torch, which reads exactly like a network error and is
+not one. cu126 is the correct index (491618f).
+Stage 7: refuse to ship the better model (7ddee4a, 3e6ab35)
+The fine-tune won by six points and I did not ship it, because AUROC being rank-based cuts both ways. The
+extension's three-state thresholds and its stated false-positive rate had been fitted to the probe's score
+distribution. The fine-tune was exported without calibration, so its raw sigmoid had an expected calibration
+error of about 0.061. Dropping the new weights in behind the old thresholds would have produced a genuinely
+better detector wearing wrong verdict labels and quoting a false-positive rate that was never measured for it.
+So I wrote scripts/bench/calibrate_onnx.py, which reconstructs the exact training validation split, fits a
+temperature by negative log-likelihood, re-picks the abstention band, and then reports what that band does on
+the external set. Section 4.6 has the full result. Two decisions came out of it, and Section 4.7 is about the
+second one.
+Stage 8: hardening and publication (1af57fb, 9f2cc22)
+The final pass reviewed every source file. It removed 8,298 vendored node_modules files that had been
+committed before the ignore rule existed, deleted five unimported files including a 540 KB dead build chunk,
+dropped 156 MB of binaries nothing loads, and closed four security issues in the background worker.
+Sections 6 and 7 cover both in detail. Test count went from 17 to 31.
+
+
+--- PAGE 10 ---
+UnDiffused: a technical account
+On-device AI image detection
+10
+github.com/AkshayReddyGujjula/UnDiffused-AI
+3. How the running system works
+From the right-click to the verdict, traced through the real code.
+3.1 The three execution contexts
+A Manifest V3 extension is not one program. It is three that talk by message passing, and almost every bug in
+Section 2's interlude came from forgetting which one a piece of code was running in.
+Context
+File
+Lives for
+Can do
+Service worker
+src/background/main.ts
+Wakes on an event,
+dies when idle
+Context menus, cross-origin fetch, script
+injection. The only privileged component.
+Content script
+src/content/index.tsx
+As long as the page
+Touch the page DOM, render the UI, no
+cross-origin fetch.
+Web Worker
+src/content/inference/worke
+r.ts
+Created once per
+content script
+Run ONNX without blocking the page. No
+DOM.
+3.2 End to end, step by step
+1. Menu registration. registerContextMenu (main.ts:146) clears any existing entry and creates
+undiffused-scan for image contexts, on both install and startup.
+2. The click. handleContextMenuClick (main.ts:106) checks the menu id, that info.srcUrl exists, and that
+there is a tab id.
+3. Making sure someone is listening. ensureContentScript (main.ts:44) sends a PING to frame 0. If
+nothing answers, it reads the content-script file list out of the manifest and injects with
+chrome.scripting.executeScript, then polls until it responds. This exists because declared content scripts
+only inject on page load, so every tab open before install had none.
+4. Dispatch. A SCANNING message goes to frame 0 only (main.ts:121), so an advertising iframe cannot
+answer on the page's behalf. A failure here sets a red badge with the reason in its tooltip rather than doing
+nothing visible.
+5. Buffering. src/content/ready.ts receives the request at module scope, before React has mounted. It
+holds a single slot, not a queue: an older queued scan is stale by definition once a newer one arrives.
+registerScanHandler drains it synchronously on mount.
+6. Getting the pixels. fetchImageViaBackground (imageLoader.ts:4) handles data: and blob: URLs itself.
+Anything else goes to the service worker, because a content script is bound by the page's CORS rules and
+the worker is not. That asymmetry is the reason Section 7 exists.
+7. Saliency and crops, on the main thread. runMultiCropInference (pipeline.ts:89) draws the bitmap to an
+OffscreenCanvas, computes a quality map, and picks nine adaptive crops. See 3.3.
+8. Transfer. The request gets a UUID, its callbacks go into pendingRequests, a 30 second timeout is armed,
+and the bitmap is transferred (zero-copy) to the worker. Scanner.tsx:60 nulls its own reference
+immediately, because a transferred bitmap leaves a neutered handle behind that would silently break a
+re-scan.
+9. The verdict. The worker serialises all work through a promise chain, loads the ONNX session once and
+reuses it, then runs one forward pass on the whole image resized to 224x224. That single probability is
+the verdict.
+
+
+--- PAGE 11 ---
+UnDiffused: a technical account
+On-device AI image detection
+11
+github.com/AkshayReddyGujjula/UnDiffused-AI
+10. The evidence. The nine crops are scored in batches of eight, purely to colour the heatmap. They are
+explicitly not the verdict, because a 224x224 crop is out of distribution relative to training. A failure in this
+loop is caught and skipped so it cannot destroy a verdict that already succeeded.
+11. Return. The worker posts the result and closes the bitmap. The pipeline matches the id, attaches the
+main-thread heatmap, and resolves. Scanner.tsx moves from scanning to result and ResultView renders
+the pill.
+The verdict comes from one forward pass on the whole image. The v1 pipeline averaged four quadrants
+and blended a global and a local model 25/75. None of that survived, because all of it had been tuned against
+a model later shown to carry no signal. The model is trained on whole images resized to 224, so that is what it
+is scored on.
+3.3 Saliency and adaptive crops
+computeQualityMap (saliency.ts) builds a per-pixel importance score from three metrics on the Rec.601 luma,
+each min-max normalised across the image and then weighted:
+gray     = 0.299R + 0.587G + 0.114B
+sharpness= |4-neighbour Laplacian|, averaged over a 5x5 window   weight 0.5
+edges    = sqrt(gx^2 + gy^2) from a 3x3 Sobel                    weight 0.3
+contrast = sqrt(mean(gray^2) - mean(gray)^2) over 5x5            weight 0.2
+quality  = 0.5*sharpness + 0.3*edges + 0.2*contrast
+One honest note about that code: the comment calls the first metric the local variance of the Laplacian, and
+what is implemented is the local average of its magnitude. The source says so in place, having traded the
+exact statistic for speed. It is a proxy for high-frequency energy either way.
+getAdaptiveCrops then slides a 224x224 window at stride 56, scores each candidate by sampling the quality
+map every 8 pixels (784 samples per window), sorts by score, and greedily selects nine while rejecting any
+candidate overlapping an already-selected crop by more than 30% of a crop's area. If fewer than nine survive,
+the 3x3 grid fills the remainder. Deep scan mode skips saliency entirely and tiles the image.
+3.4 contract.ts, the spine
+This file exists because the shipped inference path guessed at the model's interface and was wrong about it
+for the project's entire history. Its opening comment states the thesis of the whole project:
+That is the defining hazard of ML inference code: wrong indices still produce finite floats, a sigmoid still returns
+something in [0,1], and a progress bar will happily render it. The only defences are asserting the tensor
+contract at load time and testing against images whose labels are known.
+What it enforces:
+ Tensor names and arity, at load time. assertModelContract checks that the session exposes exactly the
+declared input and output and exactly one of each, and throws rather than degrading.
+ Output shape, on first inference, because the batch dimension is symbolic until then.
+ Striding. logitsToDistributions indexes by i * classCount, never by i. That single change is the v1 bug
+fix, and a test pins it with four batch items whose dominant classes differ so an indexing error cannot pass
+by coincidence.
+
+
+--- PAGE 12 ---
+UnDiffused: a technical account
+On-device AI image detection
+12
+github.com/AkshayReddyGujjula/UnDiffused-AI
+ Refusal. aiClassIndex is null for both v1 checkpoints, and toAiProbability returns null rather than
+inventing a number. That null propagates to the UI, which renders No model verdict instead of a
+percentage.
+ Calibration. Temperature, thresholds and every measured figure live here as named constants with their
+provenance in comments.
+ Non-finite rejection. A model emitting NaN or an infinity now throws. Section 4.8 explains why that was
+necessary.
+3.5 The forensic toolkit
+Ten classical tools sit alongside the neural verdict. They are deterministic, explainable, and were largely
+written in phase one. None of them feeds the verdict; they are there so a user can look at the evidence
+themselves rather than trusting a number.
+Tool
+What it computes
+ELA
+Re-encodes to JPEG at a chosen quality, decodes, and maps the per-pixel absolute residual. Normalised
+against the 95th percentile rather than the max, so one bright splice boundary cannot wash out the rest of
+the image.
+FFT
+Hand-written radix-2 Cooley-Tukey FFT over rows then columns of a 256x256 grayscale, log-magnitude,
+DC-centred, plus a detector for symmetric peaks that indicate upsampling grid artifacts.
+PRNU
+Multiplicative sensor-noise residual: Gaussian denoise, then (image - denoised) / image. Scored by the
+coefficient of variation of 32x32 block variances and by Pearson correlation between Sobel edge strength
+and residual magnitude, which measures how much scene content leaked into the residual.
+Clone
+Copy-move detection. 4x4 mean-pooled L2-normalised luminance descriptors, FNV-1a hashed into
+buckets, then cosine similarity within buckets. Because descriptors are already normalised, the cosine is
+a plain dot product.
+Aberration
+Per-channel Sobel at high-contrast edges, measuring the angular separation between the red/green and
+blue/green gradient vectors. Real lenses refract the channels differently, so low separation is the synthetic
+signal.
+Noise
+9-point Laplacian residual, per-block variance, coefficient of variation inverted into a uniformity score.
+Suspiciously uniform noise is the tell, which is the opposite of natural sensor behaviour.
+Gradient
+Sobel, Laplacian, or a full Canny pipeline with non-maximum suppression over four angle bins and
+iterative 8-connectivity hysteresis, written without recursion to stay inside the JavaScript call stack.
+Compression
+8x8 DCT per block, then a brute-force search over JPEG quality levels for the quantiser that best explains
+the coefficients. A block re-saved at a different quality misfits, which is the cross-compression signal.
+Metadata
+A hand-rolled JPEG marker walker: APP1 for EXIF and XMP, APP13 for IPTC, a TIFF IFD reader
+handling both byte orders and following the ExifIFD and GPS pointer tags. No third-party library. Software
+strings are matched against an AI generator keyword list.
+Highlight
+Finds specular highlights, fits a luminance gradient over a 21x21 patch to get a light direction, and
+compares angles with a wraparound-correct circular difference.
+All ten run in the page, on canvas, with no network access.
+
+
+--- PAGE 13 ---
+UnDiffused: a technical account
+On-device AI image detection
+13
+github.com/AkshayReddyGujjula/UnDiffused-AI
+4. The model
+Architecture, training, export, quantization, calibration, and the one decision that kept a better model off
+the shelf for a day.
+4.1 Architecture
+input   pixel_values   float32 [batch, 3, 224, 224]
+        normalised with ImageNet mean/std, bicubic resize
+trunk   facebook/dinov2-small (ViT-S/14), last blocks unfrozen
+pool    mean over patch tokens, excluding CLS
+head    Linear(384 -> 1), then .squeeze(-1)
+output  logits         float32 [batch]
+        P(AI) = sigmoid(logit / 1.9077)
+One model, one logit, one forward pass. There is no class-index question to get wrong, which was a
+deliberate response to the v1 failure. The head is trained with binary cross-entropy against label 1 =
+generated, so a higher logit means more likely AI as a property of the training objective rather than as an
+assumption written in a comment.
+DINOv2 was chosen because it is self-supervised. It never saw the labels real or generated during
+pre-training, so it cannot have learned this task in advance, and its features are known to be strong for linear
+probing. Mean pooling over patch tokens beat CLS and beat CLS concatenated with mean, measured rather
+than assumed: 0.9748 against 0.967 and 0.982 on the in-distribution test split, but critically all three collapsed
+to 0.64 to 0.66 on content-matched pairs, which is how the shortcut was first quantified across
+representations.
+4.2 Why a frozen probe first
+The first v2 was a frozen backbone with a linear probe on cached features, trainable in minutes on a CPU.
+That was a deliberate ordering: a probe measures how much of the task is already linearly separable in the
+backbone's features, and it makes the experiment loop fast enough to run the corpus experiments that
+exposed the shortcut. Fine-tuning came only after the data question was settled, so that the GPU was spent
+on a corpus known to be sound.
+4.3 Training the fine-tune
+Setting
+Value
+Why
+Corpus
+matched_corpus_v1, 4,000 pairs
+(8,000 images)
+Content-matched. Section 2.4.
+Split
+75 / 12.5 / 12.5 by pair_id, seed
+20260903
+Grouped by pair so a photograph and its render can never
+land on opposite sides of the split.
+Holdout
+SDXL removed from the pool entirely
+Tests generalisation to an unseen generator.
+Unfrozen
+Last 4 transformer blocks plus the head
+The 1660 Ti has 6 GB. Full fine-tuning does not fit.
+Epochs
+8, best epoch auto-saved (epoch 5)
+Validation AUROC peaked and then declined, which is
+overfitting; only the best checkpoint is kept.
+Schedule
+OneCycle, AMP mixed precision
+Speed on Turing.
+Time
+About 4.3 minutes per epoch
+Roughly 35 minutes total.
+
+
+--- PAGE 14 ---
+UnDiffused: a technical account
+On-device AI image detection
+14
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Grouping the split by pair_id is not a detail. Each pair shares a caption and a subject. If the real
+photograph landed in train and its generated twin in test, the model could recognise the scene and score well
+without detecting anything. Both members of a pair always move together.
+4.4 Export, and the operator that does not exist in a browser
+Export runs the ONNX graph and the PyTorch model on identical input and refuses to write the file if they
+disagree beyond 1e-3. Measured divergence was 1.3e-05. It then quantizes to int8, which takes the file from
+88 MB to 24.9 MB, a compression of 3.55x.
+Quantization is lossy, so it is measured rather than assumed: the exporter reports the maximum divergence
+against PyTorch (1.37 on probe tensors) and warns that the int8 file must be re-scored on the benchmark
+before it ships. It is, and the int8 model is the only one whose numbers appear in this document.
+The operator constraint is the important part:
+quantize_dynamic(fp32, int8, weight_type=QuantType.QInt8,
+                 op_types_to_quantize=["MatMul"])   # NOT Conv
+Left to itself, quantize_dynamic also quantizes Conv, producing ConvInteger. The WASM backend of
+onnxruntime-web implements MatMulInteger and does not implement ConvInteger, so the model loads
+perfectly in Python and cannot load in a browser at all. Both exporters now call assert_browser_compatible
+and refuse to write a graph containing an operator the target runtime lacks. The cost of leaving the
+patch-embedding Conv in fp32 is 0.7 MB.
+4.5 Metadata generated from the artifact, never typed
+Every field in detector_v2_finetuned_meta.json is read off the exported graph. The previous attempt at this
+declared the input as "input" and the output as "output" when the real tensors were pixel_values and
+logits. Hand-written metadata describes what someone believed; generated metadata describes what
+exists.
+4.6 Calibration
+The fine-tune's raw sigmoid was overconfident, with an expected calibration error of 0.061. Temperature
+scaling fits a single scalar T minimising negative log-likelihood on held-out data and reports sigmoid(logit /
+T). T = 1.9077, greater than 1, which shrinks every logit toward zero. That is the expected direction for a
+fine-tuned network against a linear probe.
+temperature: 1.9077
+val AUROC:   0.9583      ECE raw 0.0608  ->  calibrated 0.0237
+band:        low 0.2102, high 0.6482
+  on val:       abstain 15.87%   FPR 4.97%   TPR 93.85%   (n=750)
+  on external:  abstain 14.25%   FPR 6.88%   TPR 93.77%   (n=800)
+external AUROC 0.9543   ECE 0.0222
+Because temperature scaling is monotonic, AUROC does not move at all. What moves is the meaning of the
+thresholds, which is exactly why a model cannot inherit its predecessor's band.
+Where the temperature lives, and why
+
+
+--- PAGE 15 ---
+UnDiffused: a technical account
+On-device AI image detection
+15
+github.com/AkshayReddyGujjula/UnDiffused-AI
+The two v2 models disagree about where calibration belongs. The frozen probe folds its temperature into the
+exported linear layer, so its graph emits an already-calibrated logit. The fine-tune does not, and is scaled at
+read time. A bare divisor inside the parser would therefore double-apply the moment anyone repointed at the
+probe, and would do it silently, because the result stays inside [0,1] and still renders. So the temperature is a
+field on the model contract, DETECTOR_V2_PROBE declares 1.0, and a test pins the arrangement.
+4.7 The abstention band, and the number I chose to publish
+Three states, never a bare percentage. Below 0.2102 is likely authentic, above 0.6482 is likely AI generated,
+and in between the extension says inconclusive rather than guessing. The band is fitted to a 5% false-positive
+target under a 25% abstention ceiling, both fixed in advance. It is tuned to false-positive rate rather than to
+accuracy because wrongly calling a genuine photograph fake is the more damaging error.
+The band was fitted to hit 5% and delivers 6.88% on data it has never seen. The extension publishes
+the 6.88%.
+Quoting the 4.97% would be reporting a fitting-set number as a deployment number, which is a miniature of
+the exact failure this whole project documents. Re-fitting the band on the external set would recover the
+advertised 5%, and I rejected that: it would consume the only clean measurement of the shipped thresholds in
+exchange for a nicer-sounding number. The validation fit is kept in a fittedOnVal sub-object as provenance,
+and a test asserts that the published FPR is the larger of the two, so nobody can quietly swap them back.
+4.8 Failing loudly
+A late review found that a non-finite logit still produced a verdict. sigmoid(Infinity) is exactly 1 and
+sigmoid(-Infinity) is exactly 0, so an overflowed output rendered as maximum confidence. NaN was
+worse: every comparison in toVerdict is false against NaN, so it fell through to inconclusive while the result
+still carried status ok.
+logit       P(AI)     verdict            status
+NaN         NaN       inconclusive       ok      <- fabricated
+Infinity    1         likely_ai          ok      <- fabricated
+-Infinity   0         likely_authentic   ok      <- fabricated
+The parser now throws. Because that throw must not cost a good verdict, the per-crop evidence loop catches
+and continues, so a single bad heatmap tile cannot discard a whole-image result that already succeeded.
+
+
+--- PAGE 16 ---
+UnDiffused: a technical account
+On-device AI image detection
+16
+github.com/AkshayReddyGujjula/UnDiffused-AI
+5. Evaluation
+The protocol, the corpora, the laundering suite, and every recorded result.
+5.1 The protocol is fixed and versioned
+docs/benchmark/PROTOCOL.md was written before the v1 measurement was run, and it fixes the eval set, the
+preprocessing, the three evaluation paths, the metrics and the confidence-interval method in advance. That
+ordering is the point: an evaluation designed after seeing a result is an evaluation that agrees with the result.
+Its central rule is that no point estimate is reported without its interval. Every AUROC in the v1 measurement
+carries a stratified bootstrap 95% CI over 2,000 resamples, and that is the only reason the 0.50 finding is
+defensible rather than a small-sample accident.
+5.2 The four corpora
+Corpus
+Size
+Composition
+Used for
+eval_set_v1
+100 images
+50 COCO val2017 photographs, 50
+ELSA_D3 renders across 4 generators,
+seed 20260902
+The v1 baseline. Deliberately
+small: it exists to establish that
+something is absent.
+corpus_v1
+5,000 images
+COCO against ELSA, split 3023 / 653 /
+699 plus 625 held-out SDXL
+The first v2 probe. This is the
+corpus whose seam the model
+learned.
+matched_corpus_v1
+8,000 images
+(4,000 pairs)
+Each real photo paired with an AI image
+from its own caption, row offsets 200000
+and up
+Training the shipped model.
+matched_control_v1
+800 images (400
+pairs)
+Same construction, row offsets 100001 to
+100649
+The external test set. Every
+headline number.
+Train and test do not overlap, and this was verified rather than assumed. The two matched corpora are
+drawn from disjoint row-offset windows of the source dataset. Checking the manifests directly: 0 shared row
+offsets, 0 shared pair ids, 0 shared filenames. The shipped 0.9543 is measured on images the model has
+never seen in any form.
+Image bytes are not committed, because they would bloat the repository beyond reason. The manifests are,
+and they pin every source URL with a SHA-256, so any corpus can be reconstructed byte-for-byte by a fetch
+script. Reproducibility without storage.
+5.3 The laundering suite
+An image in the wild has been re-encoded, resized or screenshotted several times before anyone right-clicks
+it, so every figure is reported under those conditions too. Nine transforms, applied at evaluation time only.
+Transform
+AUROC
+Transform
+AUROC
+none
+0.954
+double JPEG
+0.958
+normalized 512px q90
+0.956
+resize chain
+0.954
+JPEG q75
+0.955
+WebP q75
+0.951
+
+
+--- PAGE 17 ---
+UnDiffused: a technical account
+On-device AI image detection
+17
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Transform
+AUROC
+Transform
+AUROC
+JPEG q50
+0.948
+screenshot re-capture
+0.957
+JPEG q30
+0.950
+spread
+0.010
+Shipped int8 model on matched_control_v1. The stability is itself evidence that the model leans on global low-frequency
+structure rather than the generator-specific high-frequency artifacts that recompression destroys.
+That same stability was a warning sign earlier in the project. The 0.990 model held flat under JPEG q30 as
+well, and there it meant the model was ignoring frequency content entirely in favour of semantics. The
+difference is that this model also survives the content-matched control, and that one did not. No single test
+decides anything; the combination does.
+5.4 Per-generator
+Generator
+AUROC
+In training?
+stable-diffusion-v1-4
+0.941
+yes
+DeepFloyd IF-II-L
+0.952
+yes
+stable-diffusion-2-1-base
+0.963
+yes
+stable-diffusion-xl-base-1.0
+0.962
+no, held out entirely
+The held-out generator scores as well as the seen ones, which is the result a generator holdout is supposed to give. Section
+2.4 is about why that alone proves much less than it appears to.
+5.5 Every recorded result file
+File
+Records
+Headline
+v1_baseline.json
+The two shipped checkpoints on eval_set_v1,
+three evaluation paths, per-generator,
+bootstrap CIs
+verdict: uninformative. Path B AUROC
+0.472, accuracy 0.49, TPR on AI 0.0
+v1_baseline_note.md
+The written finding, including both corrections
+to my own audit
+Prose
+normalization_probe.json
+5 normalisations x 2 resize policies x 5 class
+indices on the v1 checkpoints
+Strongest separation anywhere 0.3408,
+inverted, 0.159 from chance
+confound_probe.json
+DINOv2 probe on eval_set_v1 under all 9
+transforms
+identity 0.91, confound delta 0.0052
+matched_control_probe.json
+The same probe on the matched control
+identity 0.8139, confound delta -0.0109
+v2_head_cls.json
+Logistic head on CLS features
+test 0.967, held-out SDXL 0.9842,
+matched 0.6391
+v2_head_mean.json
+Logistic head on mean-pooled features
+test 0.9748, held-out SDXL 0.9898,
+matched 0.6587
+v2_head_cls+mean.json
+Logistic head on both concatenated
+test 0.982, held-out SDXL 0.9897,
+matched 0.6571
+v2_matched_probe.json
+The probe retrained on matched pairs
+test 0.8845, held-out 0.9076, shortcut
+gap -0.0077
+v2_results.json
+The int8 probe under the full laundering suite
+matched 0.894, shortcut gap -0.0232
+
+
+--- PAGE 18 ---
+UnDiffused: a technical account
+On-device AI image detection
+18
+github.com/AkshayReddyGujjula/UnDiffused-AI
+File
+Records
+Headline
+v2_finetuned_results.json
+The shipped int8 fine-tune, same suite
+matched 0.9543, CI 0.940 to 0.9668
+v2_finetuned_calibration.json
+Temperature and band for the shipped model
+T 1.9077, band 0.2102 / 0.6482
+The three v2_head_* files are the most instructive thing in that table. All three representations score 0.98
+or better on a held-out generator and all three collapse to roughly 0.65 on content-matched pairs. The shortcut
+was not an artifact of one feature choice. It was in the data, and no architecture decision could have escaped
+it.
+5.6 Cross-implementation verification
+The v1 measurement had to run the extension's exact pipeline, which is TypeScript, from Python. Rather than
+trusting a reimplementation, scripts/bench/verify_port/compare.py bundles the real saliency.ts and
+crops.ts with esbuild, runs them in Node over byte-identical RGBA input, and diffs against the Python.
+Quality-map values match bit-exactly at every sampled pixel, all crop rectangles are identical, and fusion
+matches to 1.1e-16. The one gap is stated in the protocol rather than hidden: two functions are
+module-private in worker.ts and were lifted character-for-character rather than imported.
+
+
+--- PAGE 19 ---
+UnDiffused: a technical account
+On-device AI image detection
+19
+github.com/AkshayReddyGujjula/UnDiffused-AI
+6. The repository, file by file
+107 tracked files outside node_modules. 8,392 lines of TypeScript, 4,064 of Python, 422 of tests.
+6.1 Extension runtime
+File
+Lines
+Role
+src/background/main.ts
+293
+Service worker. Context menu, on-demand content-script injection,
+message routing, the one privileged fetch, popup-triggered scans.
+src/background/urlGuard.ts
+134
+Admission control for that fetch. Extracted so it can be tested without
+a chrome runtime. Section 7.
+src/content/index.tsx
+88
+Content-script entry. Module-scope message listener, then a closed
+shadow root with the React tree inside it.
+src/content/ready.ts
+55
+Single-slot buffer for scan requests arriving before React mounts.
+Replaced a polling deadlock.
+src/content/Scanner.tsx
+409
+The root component. A five-state machine: idle, scanning, result,
+tools, error. Also upgrades an image URL by inspecting srcset,
+data-src and the parent anchor for a higher-resolution candidate.
+src/content/inference/contract.ts
+439
+The model contract, the parser, the calibration constants and the
+abstention band. Section 3.4.
+src/content/inference/worker.ts
+275
+Web Worker. ONNX session lifecycle, preprocessing, the
+whole-image verdict, crop evidence.
+src/content/inference/pipeline.ts
+171
+Main-thread side. Worker supervision, request correlation by UUID,
+30 second timeouts, bitmap transfer, worker recreation on cancel.
+src/content/inference/crops.ts
+290
+Default, 3x3 grid, deep-scan tile and saliency-ranked adaptive crop
+geometry.
+src/content/inference/saliency.ts
+184
+The quality map: Laplacian sharpness, Sobel edges, local contrast.
+src/content/inference/imageLoader.ts
+36
+URL to ImageBitmap, via the background worker when CORS
+requires it.
+src/content/inference/types.ts
+54
+Shared shapes. Encodes the refusal: status can be
+model_unavailable and every probability is nullable.
+src/utils/fetchImageAsDataUrl.ts
+29
+The data-URL variant of the same round trip, used by the forensic
+tools.
+src/content/styles.ts
+409
+Hand-curated CSS for the Tailwind classes actually used, injected
+into the shadow root.
+src/content/forensic-styles.ts
+1092
+CSS for the forensic toolkit.
+6.2 User interface
+File
+Lines
+Role
+src/components/ResultView.tsx
+445
+The verdict pill, confidence bar, crop overlays and action buttons.
+Renders No model verdict rather than a percentage when the model
+cannot support one.
+
+
+--- PAGE 20 ---
+UnDiffused: a technical account
+On-device AI image detection
+20
+github.com/AkshayReddyGujjula/UnDiffused-AI
+File
+Lines
+Role
+src/components/ForensicToolsPanel.tsx
+299
+Orchestrates the ten tools, converts the source image once to defeat
+CORS for all of them, and provides the comparison slider and
+download.
+src/components/ImageViewer.tsx
+275
+Draggable, resizable, zoomable modal with zoom-toward-cursor.
+src/components/LiquidSelect.tsx
+194
+Custom dropdown portalled inside the closed shadow root so it
+escapes overflow clipping.
+src/components/icons/ForensicIcons.tsx
+142
+13 inline SVG icons using currentColor.
+src/components/GlassCard.tsx
+62
+The shared glass surface.
+src/components/ToolCard.tsx
+76
+Collapsible tool container with a staggered entry animation.
+src/components/tools/*.tsx
+2,229
+The ten forensic tools plus a shared slider and action row. Table in
+Section 3.5.
+src/popup/Popup.tsx
+126
+320x300 launcher with a drag-and-drop zone. Closes itself after
+handing off to the in-page scanner.
+src/popup/index.tsx, popup.html
+21
+Popup mount and shell.
+6.3 Evaluation and training scripts
+File
+Lines
+Role
+scripts/bench/fetch_eval_set.py
+196
+Builds the 100-image v1 set, pinning URL and SHA-256 per
+image.
+scripts/bench/fetch_corpus.py
+247
+Builds corpus_v1 with SDXL held out and eval_set_v1 offsets
+excluded.
+scripts/bench/fetch_matched_control.py
+185
+Builds both matched corpora from disjoint row-offset windows.
+scripts/bench/extract_features.py
+198
+Caches frozen DINOv2 embeddings so probe experiments take
+seconds.
+scripts/bench/laundering.py
+113
+The nine transforms.
+scripts/bench/run_baseline.py
+504
+The v1 measurement: three paths, bootstrap CIs, per-generator,
+early-exit rate.
+scripts/bench/extension_replica.py
+258
+Verbatim Python port of the shipped v1 inference, including the
+broken parse.
+scripts/bench/verify_port/
+291
+Proves that port correct against the real TypeScript. Section 5.6.
+scripts/bench/normalization_probe.py
+138
+The 50-measurement preprocessing sweep.
+scripts/bench/probe_confound.py
+152
+Probe under every laundering transform.
+scripts/bench/train_head.py
+308
+Logistic head on cached features, with temperature and band
+fitting.
+scripts/bench/train_matched_probe.py
+274
+The same on matched pairs. Produced the 0.884.
+scripts/bench/score_model.py
+232
+Scores any ONNX model on any eval set under the full suite.
+The single scoring entry point.
+scripts/bench/calibrate_onnx.py
+250
+Re-derives temperature and band for a new model. Section 4.6.
+
+
+--- PAGE 21 ---
+UnDiffused: a technical account
+On-device AI image detection
+21
+github.com/AkshayReddyGujjula/UnDiffused-AI
+File
+Lines
+Role
+scripts/train/finetune_gpu.py
+324
+The GPU fine-tune.
+scripts/train/export_onnx.py
+226
+Fine-tune to ONNX, verified and quantized.
+scripts/train/export_probe_onnx.py
+292
+Probe to ONNX, folding scaler and temperature into the linear
+layer.
+scripts/verify/browser_check.html
+117
+Runs the shipped file under the real browser runtime, through
+the real parser.
+6.4 Tests
+31 tests on Node's built-in runner, no test framework dependency. Both suites run against an esbuild bundle
+of the real source, so they cannot drift from what ships.
+ tests/parse.test.mjs (272 lines). Output striding, pinned with four batch items whose dominant classes
+differ so an indexing error cannot pass by coincidence. Both accepted output ranks. Class-count and
+buffer-length rejection. The temperature divisor and its contract binding. Non-finite logit rejection. The
+abstention band's ordering, its three states, and the assertion that the published FPR is the external one,
+not the fitting-set one.
+ tests/urlguard.test.mjs (100 lines). The private-address guard against the encodings that defeat a naive
+implementation: 2130706433, 0x7f000001, 0177.0.0.1, 127.1, ::ffff:7f00:1. Also the false positives:
+10.example.com and a public IPv6 address must both be allowed.
+6.5 What was deleted in the final pass, and why
+Removed
+Size
+Reason
+node_modules from the index
+8,298 files
+Committed before the ignore rule existed. Untracked, not purged
+from history: a rewrite would break every existing clone.
+src/offscreen/
+192 lines
+Bundled into every build as a 540 KB chunk, never instantiated,
+and referencing a model file that does not exist.
+src/content/inference/preprocess.ts
+54 lines
+An unimported duplicate of the tensor path in worker.ts that had
+drifted, hardcoding mean, std and input size where the live path
+now reads them from the contract.
+FilterCanvas, HeatmapCanvas,
+ToolModal
+260 lines
+Imported by nothing.
+The fp32 export
+84 MB
+A regenerable intermediate that nothing loads at runtime.
+Gitignored so it cannot return on the next export.
+Three WASM builds
+48 MB
+Both jsep/WebGPU variants and the training build. The
+extension loads only the four non-jsep files.
+The superseded probe int8
+24 MB
+Its full record survives inside v2_results.json.
+HANDOFF.md, NEXT_STEPS.md, logs
+9 files
+Working notes describing finished work, plus log files the ignore
+rule already covered.
+
+
+--- PAGE 22 ---
+UnDiffused: a technical account
+On-device AI image detection
+22
+github.com/AkshayReddyGujjula/UnDiffused-AI
+7. Security model
+One component holds real privilege. This is what it can do and what stops it.
+7.1 The threat
+Inference is entirely local, so the interesting attack surface is not the model. It is the service worker. It holds
+host permissions for every http(s) origin so it can fetch an image the page will not hand over directly, which
+means its fetch is bound by neither CORS nor the page's own origin. The URL it fetches is whatever image
+the user right-clicked, and a page controls that completely.
+That is a server-side request forgery primitive with a human in the loop. A page embeds an image pointing at
+the loopback interface, the local network, or a cloud instance-metadata endpoint; one right-click fetches it with
+the extension's privileges and returns the bytes into the page's own context.
+7.2 What the guard does
+The original check validated the protocol and nothing else. The current one, in src/background/urlGuard.ts,
+refuses loopback, RFC1918 private ranges, link-local including 169.254.169.254, CGNAT, the unspecified
+address, .localhost and .internal suffixes, and the IPv6 unique-local and link-local ranges.
+Getting this right took three attempts, and each failure is now a test.
+(1) A regex over dotted-decimal blocked 127.0.0.1 and allowed 2130706433, which is the same address
+written as a 32-bit integer.
+(2) That same regex prefix-matched hostnames, so 10.example.com, an ordinary public domain, was refused.
+(3) Enumerating IPv6 forms individually allowed ::ffff:7f00:1, which is loopback written with hex hextets:
+the check looked for an embedded dotted quad and found no dot.
+The address is now parsed properly, in decimal, octal, hex and short forms, and range-checked numerically.
+The whole :: prefix is refused, because none of 0000::/8 is globally routable.
+7.3 Redirects, and the residual risk
+Validating the requested URL is not enough while fetch follows redirects: a permitted public host can answer
+302 with a Location inside the blocked ranges. A service worker cannot inspect the hops, because redirect:
+'manual' yields an opaque response with no readable header. So the final response.url is re-checked before
+the body is read.
+The residual is written next to the check rather than left implied: the request is still issued, so a blind GET to
+an internal address remains possible. What is prevented is the response coming back.
+7.4 The rest of the model
+Control
+State
+Network egress
+None. No telemetry, no analytics, no remote endpoint. The model file ships inside the extension.
+Content Security Policy
+script-src 'self' 'wasm-unsafe-eval'. No remote script, no unsafe-eval.
+Shadow DOM
+Closed. An open root exposes container.shadowRoot to page script, which would leak the
+verdict and, for a local file, the image's base64 data URL.
+
+
+--- PAGE 23 ---
+UnDiffused: a technical account
+On-device AI image detection
+23
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Control
+State
+Message listeners
+Require a positive sender.id === chrome.runtime.id match. The previous form let a
+message with no sender.id through. externally_connectable is absent, so web pages cannot
+message the extension at all.
+Frame pinning
+Both the readiness ping and the scan target frameId: 0, so an advertising iframe cannot
+answer for the page.
+Credentials
+credentials: 'omit' on every outbound fetch, so the worker cannot pull authenticated
+content a page could not read itself.
+Injection sinks
+No innerHTML, dangerouslySetInnerHTML, document.write or eval anywhere.
+Attacker-controlled EXIF reaches only React-escaped text.
+
+
+--- PAGE 24 ---
+UnDiffused: a technical account
+On-device AI image detection
+24
+github.com/AkshayReddyGujjula/UnDiffused-AI
+8. Limitations, and what I would do next
+Stated plainly, because someone will ask, and because the ones I found myself are the point.
+8.1 What this does not do
+Reliable universal detection of AI-generated images is an open research problem and this does not solve it.
+Published detectors routinely lose more than twenty points moving from curated benchmarks to real-world
+images. Specifically:
+ Four generator families, all open-source diffusion. No Midjourney, no Firefly, no autoregressive
+models. Cross-family generalisation beyond diffusion is untested, and this is the single most reproduced
+weakness in the literature. I have observed poor detection on images from at least one commercial
+generator, which is exactly this gap.
+ Two source corpora. COCO and ELSA_D3 over LAION.
+ The real half of the matched set is LAION web imagery, which includes graphics, product renders and
+screenshots rather than clean photography. Label noise depresses the score, so this makes the control
+conservative rather than inflated, but it is not ideal.
+ A 14% abstention rate is a real cost. About one image in seven gets no answer, and the measured
+false-positive rate on those it does rule on is 6.88%, not the 5% the band was fitted to.
+ 0.7 to 0.9 seconds per image on single-threaded WASM, plus a one-off session initialisation of about 1.4
+seconds warm and up to 30 seconds on a cold cache while the 24.9 MB graph is fetched and optimised.
+ No provenance verification. Where C2PA metadata exists it should be read deterministically rather than
+estimated.
+8.2 Known weaknesses in the repository itself
+ Split construction is duplicated in four scripts. finetune_gpu.py and calibrate_onnx.py agree,
+deliberately and with a comment saying they must. But train_matched_probe.py and
+export_probe_onnx.py use a different random source and a different seed, so the probe and the fine-tune
+were selected on different partitions. Both were scored externally on the same held-out set, so the
+comparison in this document stands, but the duplication is a maintenance trap and should be one imported
+function.
+ Temperature fitting and band selection exist in three copies across the bench scripts, and they have
+already drifted into different numerical paths that compute the same scalar.
+ Several scripts resolve paths relative to the working directory, and normalization_probe.py only runs
+from scripts/bench.
+ The resize interpolation mode is not in the model metadata. Training and scoring both use bicubic and
+agree, but nothing pins it, so a future caller choosing bilinear would silently degrade the numbers.
+ corpus_v1 does not exclude matched_control_v1 offsets, so those two could overlap. It does not touch
+any shipped figure, because the shipped model trains on matched_corpus_v1 and that is verifiably disjoint,
+but the older probe experiments carry the caveat.
+8.3 What I would do next, in order of value
+1. C2PA provenance. The highest-value addition by a distance, because it is deterministic and cannot be
+wrong where a signature exists. The metadata tool already parses JPEG APP1 and APP13 by hand, so the
+parsing foundation is there. A detector that reads a signature when one is present and estimates only when
+none is beats an estimator everywhere.
+
+
+--- PAGE 25 ---
+UnDiffused: a technical account
+On-device AI image detection
+25
+github.com/AkshayReddyGujjula/UnDiffused-AI
+2. More generator families. Midjourney and Firefly samples would materially strengthen or materially
+weaken the claim, and either outcome is worth having. This is the largest open question about the model.
+3. Deduplicate the split and calibration logic into one imported module, and pin the interpolation mode
+into the metadata contract where the load-time assertion can check it.
+4. Trim the package. The four WASM builds are 40 MB and only one is used on any given machine.
+5. Drop the declarative content script. On-demand injection now works, so the extension could stop
+injecting into every page unconditionally and narrow its permissions further.
+8.4 The thing worth taking away
+Four times in this project a number looked right and was not, and every single time the failure was silent: a
+parser reading across array boundaries still returned a float; a model that had learned a dataset seam still
+scored 0.990 on a held-out generator; an int8 export that could not load in a browser passed every Python
+check; a NaN logit still produced a verdict with status ok.
+Nothing threw. Nothing logged. A progress bar rendered every one of them.
+The defence is not better code. It is measurement against known labels, and a contract that refuses
+rather than degrades. The most valuable number this project produced was 0.884, chosen over a 0.990 I
+could not defend.
+
+
+--- PAGE 26 ---
+UnDiffused: a technical account
+On-device AI image detection
+26
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Appendix A. Commands and numbers
+Everything needed to reproduce the result.
+A.1 Reproduce the model
+pip install -r requirements.txt
+# the v1 result: 0.50
+python scripts/bench/fetch_eval_set.py
+cd scripts/bench && python run_baseline.py && cd ../..
+# corpora
+python scripts/bench/fetch_matched_control.py --pairs 4000 \
+       --out docs/benchmark/matched_corpus_v1
+python scripts/bench/fetch_matched_control.py --pairs 400 \
+       --out docs/benchmark/matched_control_v1
+# train, export, score, calibrate
+python scripts/train/finetune_gpu.py --epochs 8 --batch-size 16
+python scripts/train/export_onnx.py --checkpoint models/v2/detector_best.pt \
+       --name detector_v2_finetuned --quantize
+cd scripts/bench && python score_model.py \
+  --model ../../public/models/detector_v2_finetuned_int8.onnx \
+  --meta ../../public/models/detector_v2_finetuned_meta.json \
+  --eval-sets ../../docs/benchmark/matched_control_v1 && cd ../..
+python scripts/bench/calibrate_onnx.py
+A.2 Build and verify the extension
+npm install
+npm test              # 31 tests
+npm run build         # typecheck, then vite build into dist/
+npm run verify:bundle # regenerate scripts/verify/contract.mjs
+python -m http.server 8899
+# open http://127.0.0.1:8899/scripts/verify/browser_check.html
+# require BROWSER_CHECK_PASS
+# chrome://extensions -> Developer mode -> Load unpacked -> dist/
+A.3 Every headline number
+Quantity
+Value
+Measured on
+v1 shipped AUROC
+0.50
+eval_set_v1, every class index, CI contains 0.5
+v1 generated images caught
+0 of 50
+eval_set_v1, real extension path
+First rebuild, held-out SDXL
+0.990
+corpus_v1, the certified illusion
+First rebuild, content-matched
+0.659
+matched_control_v1
+Probe, content-matched
+0.894
+matched_control_v1 int8
+Shipped fine-tune
+0.9543
+matched_control_v1 int8, CI 0.940 to 0.9668
+
+
+--- PAGE 27 ---
+UnDiffused: a technical account
+On-device AI image detection
+27
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Quantity
+Value
+Measured on
+Held-out SDXL subset
+0.9617
+matched_control_v1
+Worst laundering transform
+0.9479
+JPEG q50
+Laundering spread
+0.010
+nine transforms
+Temperature
+1.9077
+NLL on the training validation split
+ECE, raw then calibrated
+0.0608 to 0.0222
+external
+Band
+0.2102 / 0.6482
+5% FPR target, 25% abstention ceiling
+Abstention rate
+14.25%
+external
+False-positive rate
+6.88%
+external, not the 4.97% it was fitted to
+True-positive rate
+93.77%
+external, on decided images
+Model size
+24.9 MB
+int8, 3.55x compression
+Latency
+0.7 to 0.9 s
+single-threaded WASM, in browser
+Tests
+31
+Node built-in runner
+A.4 Repository
+github.com/AkshayReddyGujjula/UnDiffused-AI    branch stage1-baseline
+README.md                     the result and the four findings
+docs/TRAINING_GUIDE.md        reproduce the model from scratch
+docs/benchmark/PROTOCOL.md    the fixed evaluation protocol
+docs/benchmark/*.json         every recorded measurement
+docs/benchmark/v1_baseline_note.md   the written v1 finding
+
+
+--- PAGE 28 ---
+UnDiffused: a technical account
+On-device AI image detection
+28
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Appendix B. Every tracked file
+Generated from git ls-files, not typed, so it cannot omit anything.
+107 files are tracked outside node_modules. Image corpora are deliberately absent: their manifests pin every
+source URL and SHA-256 so a fetch script reconstructs them byte-for-byte.
+Root and configuration
+Path
+Size
+Purpose
+.gitattributes
+144 B
+Marks ONNX, PyTorch and WASM as LFS, PDFs as binary.
+.gitignore
+2 KB
+Image corpora, build output, feature caches, fp32 exports,
+test bundles.
+README.md
+334 lines
+The result, the four findings, the limits.
+manifest.json
+58 lines
+MV3 manifest: service worker, content script, CSP,
+web-accessible model and WASM.
+package-lock.json
+3453 lines
+Dependency lock.
+package.json
+31 lines
+Scripts: build, test, pretest bundling, verify:bundle.
+postcss.config.js
+6 lines
+Tailwind and autoprefixer.
+requirements.txt
+13 lines
+Python dependencies for the bench and train scripts.
+tailwind.config.js
+85 lines
+Design tokens.
+tsconfig.json
+34 lines
+Strict, no emit; Vite bundles.
+tsconfig.node.json
+13 lines
+Config for the Vite config itself.
+vite.config.ts
+36 lines
+React, CRXJS, relative base, inline ES-module workers.
+Extension source: inference
+Path
+Size
+Purpose
+src/content/inference/contract.ts
+439 lines
+src/content/inference/crops.ts
+290 lines
+src/content/inference/imageLoader.ts
+36 lines
+src/content/inference/pipeline.ts
+171 lines
+src/content/inference/saliency.ts
+184 lines
+src/content/inference/types.ts
+54 lines
+src/content/inference/worker.ts
+275 lines
+Extension source: content script and background
+
+
+--- PAGE 29 ---
+UnDiffused: a technical account
+On-device AI image detection
+29
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Path
+Size
+Purpose
+src/background/main.ts
+293 lines
+src/background/urlGuard.ts
+134 lines
+src/content/Scanner.tsx
+409 lines
+src/content/forensic-styles.ts
+1092 lines
+src/content/index.tsx
+88 lines
+src/content/ready.ts
+55 lines
+src/content/styles.ts
+409 lines
+src/utils/fetchImageAsDataUrl.ts
+29 lines
+Extension source: interface
+Path
+Size
+Purpose
+src/components/ForensicToolsPanel.tsx
+299 lines
+src/components/GlassCard.tsx
+62 lines
+src/components/ImageViewer.tsx
+275 lines
+src/components/LiquidSelect.tsx
+194 lines
+src/components/ResultView.tsx
+445 lines
+src/components/ToolCard.tsx
+76 lines
+src/components/icons/ForensicIcons.tsx
+142 lines
+13 inline SVG icons using currentColor.
+src/components/tools/AberrationTool.tsx
+186 lines
+Per-channel edge separation. Low separation is the AI signal.
+src/components/tools/CloneTool.tsx
+275 lines
+Copy-move detection by hashed normalised descriptors.
+src/components/tools/CompressionTool.tsx
+217 lines
+8x8 DCT and a brute-force search for the native JPEG
+quantiser.
+src/components/tools/ELATool.tsx
+204 lines
+Error Level Analysis. 95th-percentile normalisation.
+src/components/tools/FFTTool.tsx
+283 lines
+2-D FFT spectrum, hand-written radix-2, grid-artifact detector.
+src/components/tools/GradientTool.tsx
+362 lines
+Sobel, Laplacian or a full non-recursive Canny.
+src/components/tools/HighlightTool.tsx
+196 lines
+Specular highlight light-direction consistency.
+src/components/tools/MetadataTool.tsx
+436 lines
+Hand-rolled JPEG APP1/APP13, EXIF IFD, XMP and IPTC
+parser.
+src/components/tools/NoiseTool.tsx
+202 lines
+Laplacian residual uniformity per block.
+src/components/tools/PRNUTool.tsx
+272 lines
+Multiplicative sensor-noise residual with scene-leak scoring.
+src/components/tools/ToolActionRow.tsx
+36 lines
+Shared analyse and help buttons with a busy state.
+src/components/tools/ToolSlider.tsx
+26 lines
+Shared range input with a gradient-filled track.
+src/popup/Popup.tsx
+126 lines
+src/popup/index.tsx
+9 lines
+Popup React mount.
+
+
+--- PAGE 30 ---
+UnDiffused: a technical account
+On-device AI image detection
+30
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Path
+Size
+Purpose
+src/popup/popup.html
+12 lines
+Popup shell.
+Extension source: other
+Path
+Size
+Purpose
+src/index.css
+27 lines
+Tailwind entry.
+src/vite-env.d.ts
+1 lines
+Vite ambient types.
+Tests
+Path
+Size
+Purpose
+tests/parse.test.mjs
+272 lines
+Contract, striding, temperature, band, non-finite rejection.
+tests/urlguard.test.mjs
+100 lines
+The private-address guard against real evasions.
+Scripts: evaluation
+Path
+Size
+Purpose
+scripts/bench/calibrate_onnx.py
+250 lines
+scripts/bench/extension_replica.py
+258 lines
+scripts/bench/extract_features.py
+198 lines
+scripts/bench/fetch_corpus.py
+247 lines
+scripts/bench/fetch_eval_set.py
+196 lines
+scripts/bench/fetch_matched_control.py
+185 lines
+scripts/bench/laundering.py
+113 lines
+scripts/bench/normalization_probe.py
+138 lines
+scripts/bench/probe_confound.py
+152 lines
+scripts/bench/run_baseline.py
+504 lines
+scripts/bench/score_model.py
+232 lines
+scripts/bench/train_head.py
+308 lines
+scripts/bench/train_matched_probe.py
+274 lines
+scripts/bench/verify_port/compare.py
+167 lines
+Proves the Python replica matches the TypeScript bit-exactly.
+scripts/bench/verify_port/entry.ts
+74 lines
+Bundle entry exposing the real saliency and crop code to
+Node.
+scripts/bench/verify_port/run_ts.mjs
+50 lines
+Runs that bundle over byte-identical RGBA input.
+
+
+--- PAGE 31 ---
+UnDiffused: a technical account
+On-device AI image detection
+31
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Scripts: training and export
+Path
+Size
+Purpose
+scripts/train/export_onnx.py
+226 lines
+scripts/train/export_probe_onnx.py
+292 lines
+scripts/train/finetune_gpu.py
+324 lines
+Scripts: verification
+Path
+Size
+Purpose
+scripts/verify/browser_check.html
+117 lines
+Runs the shipped file under the real browser runtime.
+Documentation and recorded results
+Path
+Size
+Purpose
+docs/TRAINING_GUIDE.md
+439 lines
+Reproduce the model from scratch on one GPU, assuming no
+prior experience.
+docs/UnDiffused-Strategy.pdf
+72 KB
+The September audit that started phase two.
+docs/benchmark/PROTOCOL.md
+128 lines
+The fixed, versioned evaluation protocol.
+docs/benchmark/confound_probe.json
+276 lines
+Probe under all nine laundering transforms.
+docs/benchmark/corpus_v1/corpus_manifest
+.json
+55037
+lines
+5,000 images with split assignments.
+docs/benchmark/eval_set_v1/manifest.json
+1126 lines
+100 images, URL and SHA-256 each.
+docs/benchmark/logits_normalized.npz
+4 KB
+Cached v1 forward pass, normalized variant.
+docs/benchmark/logits_raw.npz
+4 KB
+Cached v1 forward pass, raw variant.
+docs/benchmark/matched_control_probe.jso
+n
+276 lines
+The same on the matched control.
+docs/benchmark/matched_control_v1/manife
+st.json
+12013
+lines
+800 images, 400 pairs. The external test set.
+docs/benchmark/matched_corpus_v1/manife
+st.json
+120013
+lines
+8,000 images, 4,000 pairs. Training data.
+docs/benchmark/normalization_probe.json
+426 lines
+50-measurement preprocessing sweep.
+docs/benchmark/v1_baseline.json
+20849
+lines
+The v1 measurement, three paths, bootstrap CIs.
+docs/benchmark/v1_baseline_note.md
+184 lines
+The written v1 finding, including two corrections to my own
+audit.
+docs/benchmark/v2_finetuned_calibration.jso
+n
+26 lines
+Temperature 1.9077 and the band.
+docs/benchmark/v2_finetuned_results.json
+152 lines
+The shipped model under the full suite. 0.9543.
+
+
+--- PAGE 32 ---
+UnDiffused: a technical account
+On-device AI image detection
+32
+github.com/AkshayReddyGujjula/UnDiffused-AI
+Path
+Size
+Purpose
+docs/benchmark/v2_head_cls+mean.json
+134 lines
+Concatenated head. 0.990 held out, 0.657 matched.
+docs/benchmark/v2_head_cls.json
+134 lines
+CLS-feature head. 0.984 held out, 0.639 matched.
+docs/benchmark/v2_head_mean.json
+134 lines
+Mean-pooled head. 0.990 held out, 0.659 matched.
+docs/benchmark/v2_matched_probe.json
+106 lines
+The probe retrained on matched pairs. 0.884.
+docs/benchmark/v2_results.json
+260 lines
+The int8 probe under the full suite. 0.894.
+Shipped assets
+Path
+Size
+Purpose
+icons/icon128.png
+7 KB
+Store icon.
+icons/icon16.png
+611 B
+Toolbar icon.
+icons/icon48.png
+3 KB
+Toolbar icon.
+public/README.md
+20 lines
+What belongs in public/.
+public/models/detector_v2_finetuned_int8.on
+nx
+23.7 MB
+THE SHIPPED MODEL. 24.9 MB.
+public/models/detector_v2_finetuned_meta.j
+son
+46 lines
+Its specification, generated from the graph.
+public/wasm/ort-wasm-simd-threaded.wasm
+10.2 MB
+ONNX Runtime, SIMD and threaded.
+public/wasm/ort-wasm-simd.wasm
+10.1 MB
+ONNX Runtime, SIMD.
+public/wasm/ort-wasm-threaded.wasm
+9.4 MB
+ONNX Runtime, threaded.
+public/wasm/ort-wasm.wasm
+9.3 MB
+ONNX Runtime, baseline build.
+Archived v1 models
+Path
+Size
+Purpose
+models/v1_archive/README.md
+19 lines
+Why the two dead checkpoints are kept.
+models/v1_archive/model_global_quantized.
+onnx
+83.3 MB
+Dead v1 3-class checkpoint. Evidence for finding 1.
+models/v1_archive/model_local_quantized.o
+nnx
+83.3 MB
+Dead v1 2-class checkpoint.
+All 107 tracked files are listed above. The grouping is computed at build time and the build asserts that no
+file is left unclassified, so this table cannot silently fall behind the repository.

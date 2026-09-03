@@ -26,7 +26,7 @@ part of this project.
 
 ---
 
-## Three findings
+## Four findings
 
 ### 1. The shipped model detected nothing
 
@@ -100,6 +100,27 @@ An export verified only in the framework that produced it has not been verified
 for the runtime it ships to.
 [`scripts/verify/browser_check.html`](scripts/verify/browser_check.html) now
 runs the shipped file under the real runtime.
+
+### 4. Verification that bypasses the real code path proves nothing
+
+The browser check above passed while the extension threw on every single scan.
+
+The exported head ends in `.squeeze(-1)`, so ONNX reports the output as rank-1
+`[batch]`. The parser required rank-2 and raised `ModelContractError` on every
+image. The harness missed it because it read the raw output buffer directly
+instead of calling the parser, so it was verifying the runtime and the weights
+while stepping around the one piece of code most likely to be wrong.
+
+The harness now imports the real contract module, which is also why the
+abstention thresholds are no longer duplicated inside it.
+
+The same lesson turned up twice more while preparing this repository. A
+quantization guard in the probe exporter read a variable that was never
+assigned, so it raised `NameError`; a broad `except` swallowed that and recorded
+the quantization as failed while the int8 file sat on disk looking correct. And
+the private-address guard in the background worker took three attempts to get
+right, each failure now pinned by a test. Every one of these produced a
+plausible-looking result rather than an error, which is the entire theme.
 
 ---
 
@@ -226,12 +247,15 @@ The evaluation protocol is fixed and versioned in
 npm test
 ```
 
-23 regression tests, no new dependencies (Node's built-in runner). The central
+31 regression tests, no new dependencies (Node's built-in runner). The central
 one pins the output striding with four batch items whose dominant classes
 differ, so an indexing error cannot pass by coincidence. Others pin the
 temperature divisor to its contract, so a model swap cannot double-apply
-calibration, and pin the abstention band to reporting its external measurement
-rather than its fitting-set one.
+calibration; pin the abstention band to reporting its external measurement
+rather than its fitting-set one; reject a non-finite logit rather than letting
+it render as a confident verdict; and cover the background worker's private
+address guard against the encodings that defeat a naive one, including
+`2130706433` and `::ffff:7f00:1`, both of which are `127.0.0.1`.
 
 ---
 
@@ -243,6 +267,25 @@ npm install && npm run build
 
 Then `chrome://extensions` → Developer mode → **Load unpacked** → select `dist/`.
 Right-click any image → *Scan with UnDiffused*.
+
+---
+
+## Privacy and permissions
+
+Inference is entirely local. The model file ships inside the extension, runs on
+`onnxruntime-web` under WASM, and no image, score or verdict leaves the machine.
+There is no telemetry, no analytics and no remote endpoint of any kind.
+
+The one component with real privilege is the background service worker, which
+holds host permissions for every `http(s)` origin so it can fetch an image the
+page will not hand over directly. That fetch is bound by neither CORS nor the
+page's origin, and the URL comes from whatever the user right-clicked, so it is
+gated by [`src/background/urlGuard.ts`](src/background/urlGuard.ts): loopback,
+private, link-local, CGNAT and cloud metadata addresses are refused, in every
+encoding the URL parser accepts, and the host is re-checked after redirects
+before any response body is read. Outbound requests send no credentials. The
+scan UI lives in a closed shadow root so the host page cannot read the verdict
+back out.
 
 ---
 
@@ -276,9 +319,16 @@ Specific limits of the numbers here:
 
 ```
 src/content/inference/     contract.ts asserts the model interface; worker.ts runs it
+src/background/urlGuard.ts admission control for the one privileged fetch
 scripts/bench/             evaluation: corpora, laundering, baselines, scoring
-scripts/train/             GPU fine-tuning and verified ONNX export
+scripts/train/             GPU fine-tuning, calibration and verified ONNX export
 scripts/verify/            cross-implementation and browser-runtime checks
+tests/                     31 regression tests over the contract and the guard
 docs/benchmark/            protocol, results, and the written findings
+docs/TRAINING_GUIDE.md     reproducing the model from scratch on one GPU
 models/v1_archive/         the two dead checkpoints, kept for reproducibility
 ```
+
+Image corpora are not committed. Their manifests are, pinning every source URL
+and SHA-256, so `scripts/bench/fetch_matched_control.py` reconstructs them
+byte-for-byte.
