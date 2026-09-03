@@ -55,13 +55,39 @@ install it from nvidia.com, reboot, and try again.
 
 ## Step 2 — Install the Python packages
 
-This is the step most likely to go wrong, because **the default PyTorch install
-is CPU-only.** Installing it the ordinary way will appear to work and then train
-about thirty times slower with no error message. Use this exact command:
+This is the step most likely to go wrong, for two separate reasons.
+
+**First: the default PyTorch install on Windows is CPU-only.** Installing it the
+ordinary way appears to work and then trains about thirty times slower with no
+error message. You need PyTorch's own package index.
+
+**Second: that index is split by CUDA version, and each one only carries wheels
+for certain Python versions.** Pick the wrong one and you get a confusing error
+that looks like a network failure but isn't:
+
+```
+ERROR: Could not find a version that satisfies the requirement torch (from versions: none)
+```
+
+`from versions: none` means the index has nothing for your Python at all.
+
+So check your Python version first:
 
 ```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+python --version
 ```
+
+| Your Python | Command to run |
+|---|---|
+| 3.14 | `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126` |
+| 3.9 - 3.13 | `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126` |
+
+`cu126` (CUDA 12.6) is the right choice either way: it is the only index that
+currently carries Windows wheels for Python 3.14, and it supports the 1660 Ti's
+Turing architecture. Do **not** use `cu121` — it stops at Python 3.13.
+
+If `nvidia-smi` reported a driver older than about 525, update it from
+nvidia.com before installing, or CUDA 12.6 will not load.
 
 Then the rest:
 
@@ -302,14 +328,24 @@ git push
 
 ## When something breaks
 
+### `Could not find a version that satisfies the requirement torch (from versions: none)`
+
+Not a network problem. The CUDA index you pointed pip at has no wheels for your
+Python version. `cu121` and older stop at Python 3.13; only `cu126` and `cu128`
+carry Python 3.14. Use `cu126`:
+
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+```
+
 ### `CUDA available: False`
 
-The most common problem, and the most important to fix. You have the CPU-only
-PyTorch installed. Remove it and reinstall the CUDA build:
+The other common problem. You have the CPU-only PyTorch installed. Remove it and
+reinstall the CUDA build:
 
 ```bash
 pip uninstall -y torch torchvision
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 ```
 
 Then re-run the check in Step 2. If it still says `False`, update your NVIDIA
