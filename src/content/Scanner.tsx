@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { setScannerReady } from './ready';
+import { registerScanHandler, unregisterScanHandler } from './ready';
 import { GlassCard } from '../components/GlassCard';
 import { ResultView, ScanResult } from '../components/ResultView';
 import { ForensicToolsPanel } from '../components/ForensicToolsPanel';
@@ -174,58 +174,42 @@ export const Scanner: React.FC = () => {
     };
 
     useEffect(() => {
-        // Deliberately NOT async. Chrome keeps the message port open only when a
-        // listener returns literal `true`; an async function returns a Promise,
-        // which is truthy but not `true`, so Chrome closes the port and the
-        // sender's sendMessage rejects with "The message port closed before a
-        // response was received" -- even though the scan started fine. Nothing
-        // in this body awaits, so the async was never needed.
-        const handleMessage = (
+        // Scan requests arrive at module scope (see index.tsx) and are
+        // buffered there until this runs, so a right-click that lands before
+        // React mounts is replayed rather than lost.
+        const startScan = (imageUrl: string) => {
+            isShuttingDownRef.current = false;
+            scanTokenRef.current += 1;
+
+            const highResUrl = findHighestResImageUrl(imageUrl);
+            console.log(`[UnDiffused] Upgrading Image URL: ${imageUrl} -> ${highResUrl}`);
+
+            setTargetImage(highResUrl);
+            setResult(null);
+            setError(null);
+            imageBitmapRef.current = null;
+            runScan(highResUrl, 'default');
+        };
+
+        registerScanHandler(startScan);
+
+        // Errors still come straight from the background.
+        const handleError = (
             message: unknown,
-            sender: chrome.runtime.MessageSender,
-            sendResponse: (response?: unknown) => void
+            sender: chrome.runtime.MessageSender
         ) => {
-            if (sender.id && sender.id !== chrome.runtime.id) {
-                return;
-            }
-            if (!message || typeof message !== 'object') {
-                return;
-            }
-
-            const typed = message as { type?: string; imageUrl?: string };
-            if (typeof typed.type !== 'string') {
-                return;
-            }
-
-            if (typed.type === 'SCANNING' && typeof typed.imageUrl === 'string') {
-                // Acknowledge synchronously so the background's await resolves.
-                sendResponse({ received: true });
-                isShuttingDownRef.current = false;
-                scanTokenRef.current += 1;
-
-                // Enhancement: Try to find a higher resolution version of the image
-                const highResUrl = findHighestResImageUrl(typed.imageUrl);
-                console.log(`[UnDiffused] Upgrading Image URL: ${typed.imageUrl} -> ${highResUrl}`);
-
-                setTargetImage(highResUrl);
-                setResult(null);
-                setError(null);
-                // Reset cache on new scan
-                imageBitmapRef.current = null;
-                runScan(highResUrl, 'default');
-            } else if (typed.type === 'ERROR') {
+            if (sender.id && sender.id !== chrome.runtime.id) return;
+            const typed = message as { type?: string } | null;
+            if (typed?.type === 'ERROR') {
                 setState('error');
                 setError('An error occurred in background');
             }
         };
 
-        chrome.runtime.onMessage.addListener(handleMessage);
-        // Only now can a scan request actually be received. The background
-        // polls for this before sending one.
-        setScannerReady(true);
+        chrome.runtime.onMessage.addListener(handleError);
         return () => {
-            setScannerReady(false);
-            chrome.runtime.onMessage.removeListener(handleMessage);
+            unregisterScanHandler();
+            chrome.runtime.onMessage.removeListener(handleError);
         };
     }, []);
 

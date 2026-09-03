@@ -55,42 +55,44 @@ function isValidImageUrl(rawUrl: string): boolean {
  * are two different moments, and a message sent between them is dropped.
  */
 async function ensureContentScript(tabId: number): Promise<boolean> {
-    const ping = async (): Promise<{ alive?: boolean; ready?: boolean } | null> => {
+    // frameId 0 pins this to the top frame. Without it, sendMessage fans out to
+    // every frame in the tab and the first reply wins, so an ad iframe can
+    // answer on behalf of the page.
+    const ping = async (): Promise<{ alive?: boolean } | null> => {
         try {
-            return await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+            return await chrome.tabs.sendMessage(tabId, { type: 'PING' },
+                                                 { frameId: 0 });
         } catch {
             return null;
         }
     };
 
-    let status = await ping();
+    if ((await ping())?.alive) return true;
 
-    if (!status?.alive) {
-        // Read the built filename from the manifest rather than hardcoding it:
-        // the bundler emits a content-hashed name that changes every build.
-        const files = chrome.runtime.getManifest().content_scripts?.[0]?.js;
-        if (!files?.length) {
-            console.error('[UnDiffused] No content script declared in the manifest.');
-            return false;
-        }
-        try {
-            await chrome.scripting.executeScript({ target: { tabId }, files });
-        } catch (e) {
-            // Restricted pages cannot be scripted at all: chrome://, the Chrome
-            // Web Store, the PDF viewer, and file:// without the opt-in.
-            console.error('[UnDiffused] Cannot inject into this tab:', e);
-            return false;
-        }
+    const files = chrome.runtime.getManifest().content_scripts?.[0]?.js;
+    if (!files?.length) {
+        console.error('[UnDiffused] No content script declared in the manifest.');
+        return false;
+    }
+    try {
+        await chrome.scripting.executeScript({
+            target: { tabId, frameIds: [0] }, files
+        });
+    } catch (e) {
+        // Restricted pages cannot be scripted at all: chrome://, the Chrome Web
+        // Store, the PDF viewer, and file:// without the opt-in.
+        console.error('[UnDiffused] Cannot inject into this tab:', e);
+        return false;
     }
 
-    // Wait for React to mount and register the SCANNING listener (up to ~4s).
-    for (let attempt = 0; attempt < 40; attempt++) {
-        status = await ping();
-        if (status?.ready) return true;
+    // Only wait for the listener to exist, not for React to mount. A request
+    // arriving before mount is buffered by the content script and replayed.
+    for (let attempt = 0; attempt < 30; attempt++) {
+        if ((await ping())?.alive) return true;
         await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    console.error('[UnDiffused] Content script injected but never became ready.');
+    console.error('[UnDiffused] Content script injected but never responded.');
     return false;
 }
 
@@ -133,7 +135,7 @@ async function handleContextMenuClick(
         await chrome.tabs.sendMessage(tab.id, {
             type: 'SCANNING',
             imageUrl: info.srcUrl
-        });
+        }, { frameId: 0 });
     } catch (e) {
         // Readiness was already confirmed by ensureContentScript, so a closed
         // message port here means the listener acknowledged and moved on rather
@@ -255,7 +257,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 await chrome.tabs.sendMessage(activeTab.id, {
                     type: 'SCANNING',
                     imageUrl: dataUrl
-                });
+                }, { frameId: 0 });
 
                 sendResponse({ success: true });
 

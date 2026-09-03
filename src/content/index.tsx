@@ -9,22 +9,33 @@ import { createRoot } from 'react-dom/client';
 import { Scanner } from './Scanner';
 import { injectStyles } from './styles';
 import { injectForensicStyles } from './forensic-styles';
-import { isScannerReady } from './ready';
+import { isScannerReady, deliverScan } from './ready';
 
 /**
- * Answer readiness pings from the background worker.
+ * Receive scan requests at module scope, before React exists.
  *
- * Registered at module scope so it exists the instant the content script runs,
- * rather than after React mounts. The background injects this script into tabs
- * that predate the extension being loaded, then polls PING until `ready` is
- * true before sending a scan request. Without this the first right-click after
- * an extension reload silently does nothing.
+ * Registered the instant the content script runs, rather than when the Scanner
+ * mounts. A request arriving before mount is buffered by the bridge and
+ * replayed on mount, so the background can fire and forget instead of polling
+ * for readiness -- polling deadlocked whenever an iframe answered first and
+ * never mounted a React app of its own.
  */
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if ((message as { type?: string })?.type === 'PING') {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (sender.id && sender.id !== chrome.runtime.id) return undefined;
+    const typed = message as { type?: string; imageUrl?: string } | null;
+    if (!typed || typeof typed.type !== 'string') return undefined;
+
+    if (typed.type === 'PING') {
         sendResponse({ alive: true, ready: isScannerReady() });
         return undefined;
     }
+
+    if (typed.type === 'SCANNING' && typeof typed.imageUrl === 'string') {
+        deliverScan(typed.imageUrl);
+        sendResponse({ received: true });
+        return undefined;
+    }
+
     return undefined;
 });
 
