@@ -96,3 +96,6 @@ scripts/verify/contract.mjs
 # public/models/, which holds the model the extension actually ships.
 /models/v2/
 /models/_smoketest/
+
+# Run logs (regenerable)
+*.log
