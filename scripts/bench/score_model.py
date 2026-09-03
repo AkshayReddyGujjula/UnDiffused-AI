@@ -174,8 +174,23 @@ def main():
         "eval_sets": {},
     }
 
-    for d in args.eval_sets:
+    # Resolve eval-set paths against the repo root as well as the working
+    # directory, so the defaults work whether the script is run from the repo
+    # root or from scripts/bench. A relative path that exists as-is wins;
+    # otherwise fall back to repo-root/<path>.
+    repo_root = Path(__file__).resolve().parent.parent.parent
+
+    def resolve_eval_set(d):
         p = Path(d)
+        if (p / "manifest.json").exists():
+            return p
+        alt = repo_root / d
+        if (alt / "manifest.json").exists():
+            return alt
+        return p  # report the original path in the skip message
+
+    for d in args.eval_sets:
+        p = resolve_eval_set(d)
         if not (p / "manifest.json").exists():
             print("  skipping {} (no manifest)".format(d))
             continue

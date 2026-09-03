@@ -262,11 +262,26 @@ It writes into `public/models/`:
 
 ## Step 6 — Score it properly
 
+First fetch the held-out evaluation set. It is **not** the training corpus and
+is not on this machine yet — it is gitignored, and it is drawn from a different
+slice of the source data (offset 100000 vs the training corpus's 200000), so the
+model has never seen any of it. It is also the exact set the current shipped
+model scored 0.894 on, which is what makes the comparison fair. About 4 minutes:
+
 ```bash
-cd scripts/bench
-python score_model.py --model ../../public/models/detector_v2_finetuned_int8.onnx --meta ../../public/models/detector_v2_finetuned_meta.json --out ../../docs/benchmark/v2_finetuned_results.json
-cd ../..
+python scripts/bench/fetch_matched_control.py --pairs 400 --out docs/benchmark/matched_control_v1
 ```
+
+Then score the **int8** file against it — one line, because the wrapped version
+breaks in the terminal, and the `--eval-sets` path must be given explicitly (the
+default resolves relative to `scripts/bench`, not the repo root):
+
+```bash
+cd scripts/bench && python score_model.py --model ../../public/models/detector_v2_finetuned_int8.onnx --meta ../../public/models/detector_v2_finetuned_meta.json --eval-sets ../../docs/benchmark/matched_control_v1 --out ../../docs/benchmark/v2_finetuned_results.json 2>&1 | tee ../../score.log; cd ../..
+```
+
+If it prints `skipping ... (no manifest)`, the eval set was not found — the fetch
+above did not finish, or the `--eval-sets` path is wrong. Re-run the fetch.
 
 Score the **int8** file, because that is the one that ships. Scoring the fp32
 one tells you about a file nobody will run.
