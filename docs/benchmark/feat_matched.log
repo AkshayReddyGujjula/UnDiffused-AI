@@ -1,0 +1,28 @@
+
+=== backbone: dinov2-small ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/223 [00:00<?, ?it/s]Loading weights: 100%|##########| 223/223 [00:00<00:00, 7495.17it/s]
+  loaded 22.1M params in 1.2s
+  eval_set_v1: 8000 images
+    512/8000  0.061s/img  eta 458s
+    1008/8000  0.060s/img  eta 423s
+    1504/8000  0.063s/img  eta 411s
+    2000/8000  0.066s/img  eta 398s
+    2512/8000  0.067s/img  eta 368s
+    3008/8000  0.067s/img  eta 336s
+    3504/8000  0.070s/img  eta 315s
+C:\Users\aksha\AppData\Roaming\Python\Python314\site-packages\PIL\Image.py:1034: UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images
+  warnings.warn(
+    4000/8000  0.077s/img  eta 307s
+    4512/8000  0.077s/img  eta 267s
+    5008/8000  0.076s/img  eta 228s
+    5504/8000  0.077s/img  eta 191s
+    6000/8000  0.076s/img  eta 152s
+    6512/8000  0.076s/img  eta 113s
+    7008/8000  0.076s/img  eta 75s
+    7504/8000  0.076s/img  eta 38s
+    8000/8000  0.076s/img  eta 0s
+  wrote dinov2-small_matched_corpus_v1.npz
+  corpus manifest not present yet; skipped
+
+Feature cache: docs\benchmark\corpus_v1\features

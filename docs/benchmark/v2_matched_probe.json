@@ -1,0 +1,106 @@
+{
+  "generated_utc": "2026-09-03T04:27:02.511343+00:00",
+  "what": "linear probe on frozen DINOv2 features, trained on content-matched pairs",
+  "backbone": "dinov2-small",
+  "representation": "mean",
+  "temperature": 1.4137,
+  "n_head_params": 385,
+  "heldout_generator": "stabilityai/stable-diffusion-xl-base-1.0",
+  "v1_shipped_baseline_auroc": 0.5,
+  "splits": {
+    "train": {
+      "n": 4502,
+      "n_ai": 2251,
+      "auroc": 0.9451,
+      "ci95": [
+        0.9391,
+        0.9512
+      ],
+      "accuracy": 0.8714,
+      "fpr_at_95tpr": 0.2697,
+      "ece": 0.0498,
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.9404,
+        "IF-II-L-v1.0": 0.9404,
+        "stable-diffusion-2-1-base": 0.9545
+      }
+    },
+    "val": {
+      "n": 750,
+      "n_ai": 375,
+      "auroc": 0.8984,
+      "ci95": [
+        0.8758,
+        0.9184
+      ],
+      "accuracy": 0.82,
+      "fpr_at_95tpr": 0.3733,
+      "ece": 0.0216,
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.8819,
+        "IF-II-L-v1.0": 0.9118,
+        "stable-diffusion-2-1-base": 0.9034
+      }
+    },
+    "test": {
+      "n": 752,
+      "n_ai": 376,
+      "auroc": 0.8845,
+      "ci95": [
+        0.8596,
+        0.9073
+      ],
+      "accuracy": 0.8085,
+      "fpr_at_95tpr": 0.4096,
+      "ece": 0.0317,
+      "per_generator": {
+        "stable-diffusion-v1-4": 0.8804,
+        "IF-II-L-v1.0": 0.8754,
+        "stable-diffusion-2-1-base": 0.8982
+      }
+    },
+    "test_heldout_SDXL": {
+      "n": 1996,
+      "n_ai": 998,
+      "auroc": 0.9076,
+      "ci95": [
+        0.8939,
+        0.9199
+      ],
+      "accuracy": 0.8332,
+      "fpr_at_95tpr": 0.3677,
+      "ece": 0.0222
+    },
+    "evalset_v1_unmatched": {
+      "n": 100,
+      "n_ai": 50,
+      "auroc": 0.8768,
+      "ci95": [
+        0.8084,
+        0.9352
+      ],
+      "accuracy": 0.77,
+      "fpr_at_95tpr": 0.56,
+      "ece": 0.1013
+    }
+  },
+  "abstention_band": {
+    "fitted_on": "val",
+    "target_fpr": 0.05,
+    "max_abstain": 0.25,
+    "band": {
+      "low": 0.5448,
+      "high": 0.8461,
+      "abstain_rate": 0.2493,
+      "fpr": 0.0488,
+      "tpr": 0.6979
+    }
+  },
+  "headline": {
+    "honest_test_auroc": 0.8845,
+    "heldout_generator_auroc": 0.9076,
+    "unmatched_auroc": 0.8768,
+    "shortcut_gap": -0.0077,
+    "improvement_over_v1": 0.3845
+  }
+}
