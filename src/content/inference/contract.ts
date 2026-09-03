@@ -227,10 +227,12 @@ export function toAiProbability(
  * repointed at the probe. Binding the divisor to the model that needs it makes
  * that class of mistake impossible rather than merely unlikely.
  */
-export const DETECTOR_V2: ModelContract & {
+export type CalibratedContract = ModelContract & {
     singleLogit: true;
     temperature: number;
-} = {
+};
+
+export const DETECTOR_V2: CalibratedContract = {
     name: 'detector_v2_finetuned',
     inputName: 'pixel_values',
     outputName: 'logits',
@@ -253,10 +255,7 @@ export const DETECTOR_V2: ModelContract & {
  * Its temperature is 1.0 because export_probe_onnx.py folded 1.4137 into the
  * graph's final linear layer -- that logit arrives calibrated.
  */
-export const DETECTOR_V2_PROBE: ModelContract & {
-    singleLogit: true;
-    temperature: number;
-} = {
+export const DETECTOR_V2_PROBE: CalibratedContract = {
     name: 'detector_v2_probe',
     inputName: 'pixel_values',
     outputName: 'logits',
@@ -419,7 +418,22 @@ export function logitsToAiProbabilities(
 
     const out: number[] = [];
     for (let i = 0; i < batch; i++) {
-        out.push(sigmoid(Number(outputData[i]) / temperature));
+        const logit = Number(outputData[i]);
+        // A non-finite logit must not become a verdict. sigmoid(Infinity) is
+        // exactly 1 and sigmoid(-Infinity) exactly 0, so an overflowed or
+        // corrupted output would render as maximum confidence; NaN is worse
+        // still, because every comparison in toVerdict is false and it falls
+        // through to "inconclusive" while the result is still reported with
+        // status "ok". Both are the same failure this file was written to
+        // prevent: a broken number that survives all the way to the UI wearing
+        // the costume of a real one.
+        if (!Number.isFinite(logit)) {
+            throw new ModelContractError(
+                `detector_v2: model emitted a non-finite logit (${logit}) at ` +
+                `batch index ${i}. Refusing to convert it into a probability.`
+            );
+        }
+        out.push(sigmoid(logit / temperature));
     }
     return out;
 }

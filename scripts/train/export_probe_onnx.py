@@ -255,11 +255,17 @@ def main():
             q_out = np.asarray(qs.run([qs.get_outputs()[0].name],
                                       {qs.get_inputs()[0].name: pix.numpy()})[0]
                                ).reshape(-1)
+            # Bind the divergence once and reuse it. It was previously
+            # recomputed inline here and then read back under a name that was
+            # never assigned, so the guard below raised NameError, the broad
+            # except swallowed it, and the metadata recorded the quantization
+            # as failed while the int8 file sat on disk looking fine.
+            q_div = float(np.max(np.abs(t_out - q_out)))
             meta["quantized"] = {
                 "file": q.name,
                 "size_mb": round(q.stat().st_size / 1e6, 2),
                 "compression_vs_fp32": round(fp32.stat().st_size / q.stat().st_size, 2),
-                "max_abs_divergence_vs_pytorch": float(np.max(np.abs(t_out - q_out))),
+                "max_abs_divergence_vs_pytorch": q_div,
                 "note": "Lossy. Score this file on the benchmark before shipping it.",
             }
             if q_div > 0.05:

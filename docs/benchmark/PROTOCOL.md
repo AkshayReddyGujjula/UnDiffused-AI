@@ -19,7 +19,7 @@ claim. It exists to replace assertion with measurement, and to produce the
 
 | Half | Source | Why it is trustworthy |
 |---|---|---|
-| Authentic (50) | COCO val2017, via `rafaelpadilla/coco2017` | Flickr photographs collected 2014–2017. Authenticity is established by collection date — the corpus predates public diffusion models — rather than by inspection. |
+| Authentic (50) | COCO val2017, via `rafaelpadilla/coco2017` | Flickr photographs collected 2014 to 2017. Authenticity is established by collection date, since the corpus predates public diffusion models, rather than by inspection. |
 | Generated (50) | `elsaEU/ELSA_D3` | Text-to-image renders with the generating model recorded per image. Four families, near-evenly split: DeepFloyd IF-II-L (13), SD 1.4 (13), SD 2.1-base (12), SDXL-base-1.0 (12). |
 
 Image bytes live under `eval_set_v1/real/` and `eval_set_v1/ai/` and are
@@ -33,11 +33,11 @@ Labels: `0 = authentic`, `1 = generated`.
 
 Each image is evaluated twice.
 
-- **raw** — bytes as fetched.
-- **normalized** — resized to 512×512 (bicubic) and re-encoded at JPEG q90.
+- **raw**: bytes as fetched.
+- **normalized**: resized to 512×512 (bicubic) and re-encoded at JPEG q90.
 
 The normalized variant exists as a confound control. The authentic half is web
-JPEG at assorted sizes; the generated half is clean renders at 256–640 px. A
+JPEG at assorted sizes; the generated half is clean renders at 256 to 640 px. A
 classifier can separate those two populations on compression history and
 resolution alone, without looking at anything image-forensic. If a score's
 AUROC survives normalization, the signal is about content. If it collapses, the
@@ -54,9 +54,9 @@ which approximates canvas `drawImage`.
 
 | Path | What it is | What it isolates |
 |---|---|---|
-| **A** — corrected single view | Whole image → 224×224 → both models. Full softmax over all 3 classes (global) and all 2 classes (local). | The checkpoints' intrinsic behaviour, free of cropping and fusion. This is the honest v1 baseline. |
-| **B** — extension as shipped | `worker.ts` verbatim: 4 quadrants → global model → the broken flat-index parse → early-exit gate → adaptive crops → local model → `probs[0]` → 25/75 blend → threshold 0.5. | What users actually get today. |
-| **C** — extension geometry, correct parsing | Identical crops and fusion to B, but correct softmax and the empirically-determined AI class index. | Separates the parsing defect from the cropping and fusion design. B→C is the cost of the bug; C→A is the cost of everything else. |
+| **A**, corrected single view | Whole image → 224×224 → both models. Full softmax over all 3 classes (global) and all 2 classes (local). | The checkpoints' intrinsic behaviour, free of cropping and fusion. This is the honest v1 baseline. |
+| **B**, extension as shipped | `worker.ts` verbatim: 4 quadrants → global model → the broken flat-index parse → early-exit gate → adaptive crops → local model → `probs[0]` → 25/75 blend → threshold 0.5. | What users actually get today. |
+| **C**, extension geometry with correct parsing | Identical crops and fusion to B, but correct softmax and the empirically-determined AI class index. | Separates the parsing defect from the cropping and fusion design. B→C is the cost of the bug; C→A is the cost of everything else. |
 
 ## The decisive test
 
@@ -79,7 +79,7 @@ decision boundary sits or how miscalibrated the model is.
   overstate what the set establishes, so no point estimate is reported without
   its interval.
 - Accuracy, TPR and FPR at the extension's hardcoded 0.5 threshold.
-- Early-exit rate — the share of images on which the shipped gate skips the
+- Early-exit rate: the share of images on which the shipped gate skips the
   local model entirely.
 - Per-generator AUROC (each generator's images vs all 50 authentic).
 - For the global head's third class: mean probability by true label and the

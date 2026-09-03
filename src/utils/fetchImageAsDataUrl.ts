@@ -5,7 +5,7 @@
  * If the image is already a data URL, it is returned as-is.
  */
 export async function fetchImageAsDataUrl(imageUrl: string): Promise<string> {
-    // Already a data URL or blob URL — no CORS issue
+    // Already a data URL or blob URL, so there is no CORS issue
     if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) {
         return imageUrl;
     }

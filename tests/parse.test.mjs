@@ -224,6 +224,19 @@ test('the probe contract declares temperature 1 because its graph folds it in', 
     assert.ok(DETECTOR_V2.temperature > 1);
 });
 
+test('a non-finite logit throws instead of becoming a confident verdict', () => {
+    // sigmoid(Infinity) is exactly 1 and sigmoid(-Infinity) exactly 0, so an
+    // overflowed output would render as maximum confidence. NaN is worse: every
+    // comparison in toVerdict is false, so it falls through to 'inconclusive'
+    // while the result still carries status 'ok'.
+    for (const bad of [NaN, Infinity, -Infinity]) {
+        assert.throws(() => logitsToAiProbabilities(new Float32Array([0, bad]), [2]),
+                      ModelContractError, `logit ${bad} must be rejected`);
+    }
+    // Confirm the failure mode this replaces: NaN really did map to a verdict.
+    assert.equal(toVerdict(NaN), 'inconclusive');
+});
+
 test('a non-positive or non-finite temperature throws instead of inverting', () => {
     for (const bad of [0, -1, NaN, Infinity]) {
         assert.throws(() => logitsToAiProbabilities(new Float32Array([1]), [1], bad),

@@ -21,7 +21,7 @@ import { isScannerReady, deliverScan } from './ready';
  * never mounted a React app of its own.
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (sender.id && sender.id !== chrome.runtime.id) return undefined;
+    if (sender.id !== chrome.runtime.id) return undefined;
     const typed = message as { type?: string; imageUrl?: string } | null;
     if (!typed || typeof typed.type !== 'string') return undefined;
 
@@ -46,8 +46,13 @@ if (!document.getElementById('undiffused-root')) {
     container.id = 'undiffused-root';
     document.body.appendChild(container);
 
-    // Create Shadow DOM for style isolation
-    const shadow = container.attachShadow({ mode: 'open' });
+    // Closed, not open. Style isolation is the reason the shadow root exists,
+    // but an open root is also readable by the page: `container.shadowRoot`
+    // would let hostile page script read the verdict and, when the scanned
+    // image came from a local file, its base64 data URL. Nothing in this
+    // extension reaches the root from outside; components inside use
+    // getRootNode(), which still works when the root is closed.
+    const shadow = container.attachShadow({ mode: 'closed' });
 
     // Inject Tailwind styles into shadow DOM
     injectStyles(shadow);

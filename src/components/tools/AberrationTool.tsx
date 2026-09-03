@@ -176,8 +176,8 @@ export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage, onR
                     </div>
                     <div className={`tool-verdict ${stats.detected ? 'tool-verdict-safe' : 'tool-verdict-suspicious'}`}>
                         {stats.detected
-                            ? '✅ Natural lens fringing detected — likely real photo'
-                            : '⚠️ No chromatic aberration — possibly synthetic'}
+                            ? '✅ Natural lens fringing detected: likely real photo'
+                            : '⚠️ No chromatic aberration: possibly synthetic'}
                     </div>
                 </div>
             )}

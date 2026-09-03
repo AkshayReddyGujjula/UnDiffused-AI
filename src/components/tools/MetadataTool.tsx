@@ -266,7 +266,9 @@ export const MetadataTool: React.FC<MetadataToolProps> = ({ targetImage }) => {
                 bytes = bytesFromDataUrl(targetImage);
             } else {
                 try {
-                    const resp = await fetch(targetImage, { mode: 'cors' });
+                    const resp = await fetch(targetImage, {
+                        mode: 'cors', credentials: 'omit',
+                    });
                     const buffer = await resp.arrayBuffer();
                     bytes = new Uint8Array(buffer);
                 } catch {
@@ -285,7 +287,9 @@ export const MetadataTool: React.FC<MetadataToolProps> = ({ targetImage }) => {
             let lastModified = '';
             if (!isDataUrl) {
                 try {
-                    const head = await fetch(targetImage, { method: 'HEAD', mode: 'cors' });
+                    const head = await fetch(targetImage, {
+                        method: 'HEAD', mode: 'cors', credentials: 'omit',
+                    });
                     contentType = head.headers.get('content-type') || '';
                     contentLength = head.headers.get('content-length') || '';
                     lastModified = head.headers.get('last-modified') || '';

@@ -1,7 +1,7 @@
 import * as ort from 'onnxruntime-web';
 import { CropRect, InferenceResult, CropResult } from './types';
 import {
-    ModelContract,
+    CalibratedContract,
     assertModelContract,
     logitsToAiProbabilities,
     DETECTOR_V2,
@@ -18,9 +18,13 @@ let config: {
     wasmPaths: string | Record<string, string>;
 } | null = null;
 
-const MEAN = [0.485, 0.456, 0.406];
-const STD = [0.229, 0.224, 0.225];
-const TARGET_SIZE = 224;
+// Preprocessing constants come from the model contract rather than from
+// literals here. They were duplicated for most of this project's history, which
+// is how a preprocessing change could silently stop matching the weights while
+// every test still passed.
+const MEAN = DETECTOR_V2.mean;
+const STD = DETECTOR_V2.std;
+const TARGET_SIZE = DETECTOR_V2.inputSize;
 
 let sessionDetector: ort.InferenceSession | null = null;
 let inferenceQueue: Promise<void> = Promise.resolve();
@@ -31,8 +35,8 @@ function batchTensors(tensors: ort.Tensor[]): ort.Tensor {
     if (tensors.length === 0) throw new Error("No tensors to batch");
     const batchSize = tensors.length;
     const channels = 3;
-    const height = 224;
-    const width = 224;
+    const height = TARGET_SIZE;
+    const width = TARGET_SIZE;
     const singleTensorSize = channels * height * width;
     const batchedData = new Float32Array(batchSize * singleTensorSize);
     tensors.forEach((tensor, i) => {
@@ -123,12 +127,17 @@ async function loadModels() {
 async function runInference(
     session: ort.InferenceSession,
     inputTensor: ort.Tensor,
-    contract: ModelContract
+    contract: CalibratedContract
 ): Promise<number[]> {
     const results = await session.run({ [contract.inputName]: inputTensor });
     const outputTensor = results[contract.outputName];
+    // Pass the contract's own temperature rather than relying on the parser's
+    // default. The default happens to be this contract's value today, so an
+    // omission here would be invisible until the day someone repoints at a
+    // model calibrated differently, which is precisely when it would matter.
     return logitsToAiProbabilities(
-        outputTensor.data as Float32Array, outputTensor.dims);
+        outputTensor.data as Float32Array, outputTensor.dims,
+        contract.temperature);
 }
 
 

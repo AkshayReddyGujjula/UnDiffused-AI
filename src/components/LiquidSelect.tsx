@@ -86,7 +86,7 @@ export function LiquidSelect<T extends string | number>({
         }
     };
 
-    // Close on click outside — works in Shadow DOM by listening on
+    // Close on click outside. Works in Shadow DOM by listening on
     // the root node and checking both the trigger and portal menu.
     useEffect(() => {
         if (!isOpen) return;

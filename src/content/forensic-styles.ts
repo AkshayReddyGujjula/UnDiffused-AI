@@ -901,7 +901,7 @@ const FORENSIC_STYLES = `
         0 8px 32px rgba(0, 0, 0, 0.4),
         0 0 0 1px rgba(255, 255, 255, 0.05),
         inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    /* Use opacity-only animation — no transform so we don't create a containing block */
+    /* Opacity-only animation: no transform, so we do not create a containing block */
     animation: dropdownFadeIn 0.15s ease-out forwards;
 }
 

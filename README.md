@@ -1,7 +1,7 @@
 # UnDiffused
 
-A Chrome extension that detects AI-generated images entirely on-device, and — more
-to the point — a record of measuring a shipped model, finding it detected
+A Chrome extension that detects AI-generated images entirely on-device. More to
+the point, it is a record of measuring a shipped model, finding it detected
 nothing, and rebuilding it under an evaluation protocol strict enough to catch
 its own replacement cheating.
 
@@ -36,17 +36,17 @@ label map, and no measured accuracy. Running them against 100 labelled images:
 | Model | Class 0 | Class 1 | Class 2 |
 |---|---|---|---|
 | global (3-class) | 0.540 | 0.437 | 0.495 |
-| local (2-class) | 0.520 | 0.480 | — |
+| local (2-class) | 0.520 | 0.480 | n/a |
 
 **Every 95% bootstrap interval contains 0.5.** Through the real extension path
 the pipeline caught **0 of 50** generated images and flagged 1 of 50
-photographs — an accuracy of 0.490, achieved by calling almost everything real.
+photographs, an accuracy of 0.490 achieved by calling almost everything real.
 
 There was also a genuine bug: the output parser handled only the 1- and 2-class
 cases, so the 3-class global model fell through to a branch that indexed
 `outputData[i]` and read across both class and batch boundaries. But **fixing it
 changed AUROC from 0.472 to 0.445.** Both are noise. The bug was concealing an
-absence, not a capability — which is the unsatisfying answer, and the true one.
+absence, not a capability. That is the unsatisfying answer, and the true one.
 
 A sweep of 5 normalisations × 2 resize policies ruled out our own preprocessing
 as the cause: the strongest deviation anywhere was 0.341, in the inverted
@@ -70,8 +70,8 @@ product shots, posters and badges. The model had learned **which dataset an
 image came from**. On content-matched pairs it scored **0.659**.
 
 A generator holdout cannot detect this. It holds out the generator while leaving
-the corpus seam intact, so the shortcut transfers — every ELSA render still
-looks like an ELSA render — and gets certified at 0.990.
+the corpus seam intact, so the shortcut transfers. Every ELSA render still looks
+like an ELSA render, and the model gets certified at 0.990.
 
 | Trained on | Unmatched | Content-matched | Gap |
 |---|---|---|---|
@@ -116,9 +116,10 @@ because the two v2 models disagree about where calibration belongs: the frozen
 probe folded its temperature into the exported graph, the fine-tune does not.
 Binding the divisor to the model that needs it means repointing between them
 cannot silently double-scale a probability. Temperature scaling is
-rank-preserving, so it moves no AUROC — it moves the thresholds those scores are
-read against, which is the entire reason the model was not shipped until this
-was re-derived. Calibration cut expected calibration error from 0.061 to 0.022.
+rank-preserving, so it moves no AUROC. What it moves is the thresholds those
+scores are read against, which is the entire reason the model was not shipped
+until this was re-derived. Calibration cut expected calibration error from 0.061
+to 0.022.
 
 **Three states, not a percentage.** Below 0.210 → likely authentic. Above
 0.648 → likely AI generated. Between → *inconclusive*, and the extension says
@@ -135,7 +136,7 @@ on:
 
 **The extension claims the 6.88%.** A band fitted to hit 5% delivers 6.9% on
 data it has never seen, and quoting the 4.97% would be reporting a fitting-set
-number as a deployment number — a smaller version of the failure this repository
+number as a deployment number: a smaller version of the failure this repository
 exists to document. Re-fitting the band on the external set would recover the
 advertised 5% and was rejected, because it would consume the only clean
 measurement of the shipped thresholds in exchange for a nicer-sounding number.
@@ -145,9 +146,9 @@ band is tuned to false-positive rate rather than to accuracy.
 
 **The contract is asserted at load time.** Tensor names, arity and class count
 are checked against the graph, and a mismatch throws rather than degrading. The
-metadata file is generated *from* the exported model, never written by hand —
-the previous attempt at this declared input `"input"` and output `"output"` when
-the real tensors were `pixel_values` and `logits`.
+metadata file is generated *from* the exported model, never written by hand. The
+previous attempt at this declared input `"input"` and output `"output"` when the
+real tensors were `pixel_values` and `logits`.
 
 **It holds under laundering.** An image in the wild has been re-encoded, resized
 or screenshotted several times before anyone right-clicks it, so every figure is
@@ -254,16 +255,16 @@ moving from curated benchmarks to real-world images.
 Specific limits of the numbers here:
 
 - **Two source corpora only** (COCO, ELSA_D3/LAION). Four generator families,
-  all open-source diffusion — no Midjourney, no Firefly, no autoregressive
+  all open-source diffusion: no Midjourney, no Firefly, no autoregressive
   models.
 - **The "real" half of the matched set is LAION web imagery**, which includes
-  graphics, product renders and screenshots. This makes the control
-  conservative — label noise depresses the score — but it is not a clean
-  photographic corpus.
+  graphics, product renders and screenshots. Label noise depresses the score, so
+  this makes the control conservative rather than inflated, but it is not a
+  clean photographic corpus.
 - **A 14% abstention rate is real cost.** About one image in seven gets no
   answer, and the measured false-positive rate on images it does rule on is
   6.9%, not the 5% the band was fitted to.
-- **~0.7–0.9 s per image** single-threaded WASM, measured in-browser, plus a
+- **~0.7 to 0.9 s per image** single-threaded WASM, measured in-browser, plus a
   one-off session initialisation of ~1.4 s warm (up to ~30 s on a cold cache
   while the 25 MB graph is fetched and optimised).
 - **No C2PA verification yet.** Where provenance exists it should be read

@@ -25,6 +25,10 @@ best_model.pth
 onnx_output/
 *.onnx
 !public/models/*.onnx
+# fp32 exports are regenerable intermediates that nothing loads at runtime;
+# only the int8 file ships. Re-ignored after the !public/models exception.
+public/models/*_finetuned.onnx
+public/models/*_probe.onnx
 
 # OS files
 .DS_Store

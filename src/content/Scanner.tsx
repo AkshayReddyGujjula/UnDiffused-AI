@@ -198,7 +198,7 @@ export const Scanner: React.FC = () => {
             message: unknown,
             sender: chrome.runtime.MessageSender
         ) => {
-            if (sender.id && sender.id !== chrome.runtime.id) return;
+            if (sender.id !== chrome.runtime.id) return;
             const typed = message as { type?: string } | null;
             if (typed?.type === 'ERROR') {
                 setState('error');

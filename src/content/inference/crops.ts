@@ -78,38 +78,49 @@ export function generateDefaultCrops(width: number, height: number): CropRect[] 
  */
 export function generateGridCrops(width: number, height: number): CropRect[] {
     const crops: CropRect[] = [];
-    const size = PATCH_SIZE; // 224
 
-    // If image is smaller than patch, return single global crop
-    if (width <= size && height <= size) {
+    // If the image is smaller than a patch on both axes, one global crop is all
+    // there is to take.
+    if (width <= PATCH_SIZE && height <= PATCH_SIZE) {
         return [{ x: 0, y: 0, width, height, label: 'Global' }];
     }
 
-    // Grid Coordinates
-    // X Axis: Left(0), Center((W-224)/2), Right(W-224)
-    const xLeft = 0;
-    const xCenter = Math.max(0, Math.floor((width - size) / 2));
-    const xRight = Math.max(0, width - size);
+    // Clamp per axis, not just when BOTH axes are small. The guard above is an
+    // AND, so a tall narrow image (say 100x1000) reaches this point with a
+    // width below PATCH_SIZE. Using a fixed 224 for the crop width there asks
+    // drawImage for a source rectangle 124px wider than the bitmap. That does
+    // not throw: the spec clips the source rectangle and scales the destination
+    // in the same proportion, so the tile is silently drawn at the wrong scale
+    // into part of the canvas with the remainder left transparent, and is then
+    // scored as evidence. These crops feed the heatmap rather than the verdict,
+    // which is exactly why it went unnoticed.
+    const sizeX = Math.min(PATCH_SIZE, width);
+    const sizeY = Math.min(PATCH_SIZE, height);
 
-    // Y Axis: Top(0), Center((H-224)/2), Bottom(H-224)
+    // X Axis: Left(0), Center((W-sizeX)/2), Right(W-sizeX)
+    const xLeft = 0;
+    const xCenter = Math.max(0, Math.floor((width - sizeX) / 2));
+    const xRight = Math.max(0, width - sizeX);
+
+    // Y Axis: Top(0), Center((H-sizeY)/2), Bottom(H-sizeY)
     const yTop = 0;
-    const yCenter = Math.max(0, Math.floor((height - size) / 2));
-    const yBottom = Math.max(0, height - size);
+    const yCenter = Math.max(0, Math.floor((height - sizeY) / 2));
+    const yBottom = Math.max(0, height - sizeY);
 
     // Top Row
-    crops.push({ x: xLeft, y: yTop, width: size, height: size, label: 'Top-Left' });
-    crops.push({ x: xCenter, y: yTop, width: size, height: size, label: 'Top-Center' });
-    crops.push({ x: xRight, y: yTop, width: size, height: size, label: 'Top-Right' });
+    crops.push({ x: xLeft, y: yTop, width: sizeX, height: sizeY, label: 'Top-Left' });
+    crops.push({ x: xCenter, y: yTop, width: sizeX, height: sizeY, label: 'Top-Center' });
+    crops.push({ x: xRight, y: yTop, width: sizeX, height: sizeY, label: 'Top-Right' });
 
     // Middle Row
-    crops.push({ x: xLeft, y: yCenter, width: size, height: size, label: 'Mid-Left' });
-    crops.push({ x: xCenter, y: yCenter, width: size, height: size, label: 'Center' });
-    crops.push({ x: xRight, y: yCenter, width: size, height: size, label: 'Mid-Right' });
+    crops.push({ x: xLeft, y: yCenter, width: sizeX, height: sizeY, label: 'Mid-Left' });
+    crops.push({ x: xCenter, y: yCenter, width: sizeX, height: sizeY, label: 'Center' });
+    crops.push({ x: xRight, y: yCenter, width: sizeX, height: sizeY, label: 'Mid-Right' });
 
     // Bottom Row
-    crops.push({ x: xLeft, y: yBottom, width: size, height: size, label: 'Bottom-Left' });
-    crops.push({ x: xCenter, y: yBottom, width: size, height: size, label: 'Bottom-Center' });
-    crops.push({ x: xRight, y: yBottom, width: size, height: size, label: 'Bottom-Right' });
+    crops.push({ x: xLeft, y: yBottom, width: sizeX, height: sizeY, label: 'Bottom-Left' });
+    crops.push({ x: xCenter, y: yBottom, width: sizeX, height: sizeY, label: 'Bottom-Center' });
+    crops.push({ x: xRight, y: yBottom, width: sizeX, height: sizeY, label: 'Bottom-Right' });
 
     return crops;
 }
