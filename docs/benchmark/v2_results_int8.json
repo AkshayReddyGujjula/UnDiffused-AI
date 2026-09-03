@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-03T04:29:25.090283+00:00",
+  "generated_utc": "2026-09-03T04:31:06.169720+00:00",
   "model": "../../public/models/detector_v2_probe_int8.onnx",
   "model_size_mb": 24.23,
   "metadata": {

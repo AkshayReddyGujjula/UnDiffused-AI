@@ -124,9 +124,26 @@ metadata file is generated *from* the exported model, never written by hand —
 the previous attempt at this declared input `"input"` and output `"output"` when
 the real tensors were `pixel_values` and `logits`.
 
-**It holds under laundering.** Scored across a JPEG quality ladder, double JPEG,
-resize chains, WebP and screenshot re-capture — because an image in the wild has
-been through several of those before anyone right-clicks it.
+**It holds under laundering.** An image in the wild has been re-encoded, resized
+or screenshotted several times before anyone right-clicks it, so every figure is
+reported under those conditions too. Shipped int8 model, 400 content-matched
+pairs never used in training:
+
+| Transform | AUROC | ECE |
+|---|---|---|
+| none | 0.894 | 0.036 |
+| normalized 512px q90 | 0.895 | 0.038 |
+| JPEG q75 | 0.897 | 0.039 |
+| JPEG q50 | 0.887 | 0.041 |
+| JPEG q30 | 0.891 | 0.044 |
+| double JPEG | 0.896 | 0.039 |
+| resize chain | 0.895 | 0.034 |
+| WebP q75 | 0.891 | 0.039 |
+| screenshot re-capture | 0.896 | 0.022 |
+
+The spread across all nine is 0.010. The stability is itself the evidence that
+the model leans on global low-frequency structure rather than the
+generator-specific high-frequency artifacts that recompression destroys.
 
 ---
 
