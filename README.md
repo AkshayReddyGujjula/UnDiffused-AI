@@ -76,7 +76,7 @@ like an ELSA render, and the model gets certified at 0.990.
 | Trained on | Unmatched | Content-matched | Gap |
 |---|---|---|---|
 | Mismatched corpora | 0.980 | 0.659 | **0.32** |
-| Content-matched pairs | 0.877 | 0.884 | **−0.008** |
+| Content-matched pairs | 0.877 | 0.884 | **-0.008** |
 
 Same backbone, same head. **The training data, not the architecture, decided
 whether it learned the shortcut or the signal.**
@@ -292,8 +292,9 @@ back out.
 ## What this does not do
 
 Reliable universal detection of AI-generated images is an open research problem,
-and this does not solve it. Published detectors lose more than twenty points
-moving from curated benchmarks to real-world images.
+and this does not solve it. This repository measures one model on one deliberately
+difficult protocol; it does not establish performance on arbitrary generators or
+real-world distributions.
 
 Specific limits of the numbers here:
 
