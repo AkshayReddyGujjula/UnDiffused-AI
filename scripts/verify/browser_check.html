@@ -11,7 +11,7 @@
   </style>
 </head>
 <body>
-<h3>detector_v2_probe_int8 — onnxruntime-web (WASM) verification</h3>
+<h3>detector_v2_finetuned_int8 — onnxruntime-web (WASM) verification</h3>
 <div id="log"></div>
 <div id="summary">running…</div>
 
@@ -61,12 +61,12 @@ const sigmoid = x => 1 / (1 + Math.exp(-x));
     ort.env.wasm.wasmPaths = '/node_modules/onnxruntime-web/dist/';
     ort.env.wasm.numThreads = 1;
 
-    const meta = await (await fetch('/public/models/detector_v2_probe_meta.json?cb=' + Date.now())).json();
+    const meta = await (await fetch('/public/models/detector_v2_finetuned_meta.json?cb=' + Date.now())).json();
     log(`metadata: in=${meta.input_name} out=${meta.output_name} size=${meta.input_size}`);
 
     const t0 = performance.now();
     const sess = await ort.InferenceSession.create(
-      '/public/models/detector_v2_probe_int8.onnx?cb=' + Date.now(),
+      '/public/models/detector_v2_finetuned_int8.onnx?cb=' + Date.now(),
       { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
     log(`session created in ${(performance.now()-t0).toFixed(0)}ms`, 'ok');
 
@@ -88,7 +88,7 @@ const sigmoid = x => 1 / (1 + Math.exp(-x));
       const tensorOut = out[meta.output_name];
       const p = logitsToAiProbabilities(tensorOut.data, tensorOut.dims)[0];
       const verdict = toVerdict(p);
-      const correct = (c.label === 'ai') ? (p > 0.5448) : (p < 0.8461);
+      const correct = (c.label === 'ai') ? (p > ABSTENTION_BAND.low) : (p < ABSTENTION_BAND.high);
       results.push({ ...c, p, verdict, ms, correct });
       log(`${c.label.padEnd(4)} ${c.name.padEnd(24)} P(AI)=${p.toFixed(4)}  ${verdict.padEnd(17)} ${ms.toFixed(0)}ms`,
           correct ? 'ok' : 'bad');

@@ -15,9 +15,10 @@ unflattering ones are included on purpose.
 | | Model | Content-matched AUROC | Notes |
 |---|---|---|---|
 | **v1 (shipped)** | 2 × ViT-B/16, 174 MB | **0.50** | Caught 0 of 50 generated images |
-| **v2 (this repo)** | DINOv2-S/14 + linear probe, 24.9 MB | **0.88–0.91** | Calibrated, abstains when unsure |
+| **v2 probe** | DINOv2-S/14 + frozen linear probe, 24.9 MB | **0.894** | The first honest rebuild |
+| **v2 fine-tuned (shipping)** | DINOv2-S/14, last blocks unfrozen, 24.9 MB | **0.954** | Calibrated, abstains when unsure |
 
-The v2 figure is measured on **content-matched pairs**: each real photograph is
+Both v2 figures are measured on **content-matched pairs**: each real photograph is
 paired with an AI image generated from that photograph's own caption, so subject
 matter is held constant and only authenticity varies. That is a harder and more
 honest test than the usual one, and the reason for it is the most interesting
@@ -104,19 +105,43 @@ runs the shipped file under the real runtime.
 
 ## How it works now
 
-**One model, one forward pass.** A frozen DINOv2-S/14 trunk, mean-pooled over
-patch tokens, into a single linear layer. The feature scaler and the fitted
-temperature are folded into that layer, so the graph emits a *calibrated* logit
-and there is no class-index question to get wrong: `P(AI) = sigmoid(logits)`.
+**One model, one forward pass.** A DINOv2-S/14 trunk with its last transformer
+blocks unfrozen, mean-pooled over patch tokens, into a single linear layer. The
+head emits one logit, so there is no class-index question to get wrong:
+`P(AI) = sigmoid(logit / T)`.
 
-**Three states, not a percentage.** Below 0.545 → likely authentic. Above
-0.846 → likely AI generated. Between → *inconclusive*, and the extension says
-so. The band was fitted on validation against a 5% false-positive target under a
-25% abstention ceiling fixed in advance. The measured cost is stated rather than
-hidden: it abstains on about one image in four and catches roughly 70% of
-generated images among those it rules on. Wrongly calling a genuine photograph
-fake is the more damaging error, so the band is tuned to false-positive rate
-rather than to accuracy.
+The temperature `T = 1.9077` was fitted by NLL on the training run's own
+validation split and lives on the model contract rather than in the parser,
+because the two v2 models disagree about where calibration belongs: the frozen
+probe folded its temperature into the exported graph, the fine-tune does not.
+Binding the divisor to the model that needs it means repointing between them
+cannot silently double-scale a probability. Temperature scaling is
+rank-preserving, so it moves no AUROC — it moves the thresholds those scores are
+read against, which is the entire reason the model was not shipped until this
+was re-derived. Calibration cut expected calibration error from 0.061 to 0.022.
+
+**Three states, not a percentage.** Below 0.210 → likely authentic. Above
+0.648 → likely AI generated. Between → *inconclusive*, and the extension says
+so. The band was fitted on the training run's validation split against a 5%
+false-positive target under a 25% abstention ceiling fixed in advance.
+
+What it actually does, measured on 800 pairs it was neither trained nor fitted
+on:
+
+| | Abstains | FPR | TPR |
+|---|---|---|---|
+| fitted on validation (n=750) | 15.9% | **4.97%** | 93.9% |
+| measured external (n=800) | 14.3% | **6.88%** | 93.8% |
+
+**The extension claims the 6.88%.** A band fitted to hit 5% delivers 6.9% on
+data it has never seen, and quoting the 4.97% would be reporting a fitting-set
+number as a deployment number — a smaller version of the failure this repository
+exists to document. Re-fitting the band on the external set would recover the
+advertised 5% and was rejected, because it would consume the only clean
+measurement of the shipped thresholds in exchange for a nicer-sounding number.
+
+Wrongly calling a genuine photograph fake is the more damaging error, so the
+band is tuned to false-positive rate rather than to accuracy.
 
 **The contract is asserted at load time.** Tensor names, arity and class count
 are checked against the graph, and a mismatch throws rather than degrading. The
@@ -129,21 +154,34 @@ or screenshotted several times before anyone right-clicks it, so every figure is
 reported under those conditions too. Shipped int8 model, 400 content-matched
 pairs never used in training:
 
-| Transform | AUROC | ECE |
+| Transform | AUROC | ECE (uncalibrated) |
 |---|---|---|
-| none | 0.894 | 0.035 |
-| normalized 512px q90 | 0.896 | 0.037 |
-| JPEG q75 | 0.899 | 0.038 |
-| JPEG q50 | 0.887 | 0.041 |
-| JPEG q30 | 0.894 | 0.042 |
-| double JPEG | 0.898 | 0.038 |
-| resize chain | 0.898 | 0.033 |
-| WebP q75 | 0.892 | 0.038 |
-| screenshot re-capture | 0.896 | 0.023 |
+| none | 0.954 | 0.071 |
+| normalized 512px q90 | 0.956 | 0.065 |
+| JPEG q75 | 0.955 | 0.068 |
+| JPEG q50 | 0.948 | 0.083 |
+| JPEG q30 | 0.950 | 0.080 |
+| double JPEG | 0.958 | 0.067 |
+| resize chain | 0.954 | 0.072 |
+| WebP q75 | 0.951 | 0.075 |
+| screenshot re-capture | 0.957 | 0.065 |
 
-The spread across all nine is 0.012 (full data: [docs/benchmark/v2_results.json](docs/benchmark/v2_results.json)). The stability is itself the evidence that
-the model leans on global low-frequency structure rather than the
-generator-specific high-frequency artifacts that recompression destroys.
+The spread across all nine is 0.010 (full data:
+[docs/benchmark/v2_finetuned_results.json](docs/benchmark/v2_finetuned_results.json)).
+The ECE column is measured on the raw sigmoid, before temperature scaling; after
+calibration it is **0.022** on the untransformed set. The AUROC stability is
+itself the evidence that the model leans on global low-frequency structure
+rather than the generator-specific high-frequency artifacts that recompression
+destroys.
+
+Per generator on the same set, with SDXL held out of training entirely:
+
+| Generator | AUROC |
+|---|---|
+| stable-diffusion-v1-4 | 0.941 |
+| DeepFloyd IF-II-L | 0.952 |
+| stable-diffusion-2-1-base | 0.963 |
+| stable-diffusion-xl (held out) | 0.962 |
 
 ---
 
@@ -161,8 +199,18 @@ cd scripts/bench && python run_baseline.py      # the v1 result: 0.50
 ```bash
 python scripts/bench/fetch_matched_control.py --pairs 4000 --out docs/benchmark/matched_corpus_v1
 python scripts/bench/extract_features.py --eval-dir docs/benchmark/matched_corpus_v1 --eval-name matched_corpus_v1
-python scripts/bench/train_matched_probe.py     # the v2 result
+python scripts/bench/train_matched_probe.py     # the v2 probe: 0.894
 python scripts/train/export_probe_onnx.py --quantize
+```
+
+The shipping model is a GPU fine-tune of the same backbone, calibrated
+separately because its exported graph emits a raw logit:
+
+```bash
+python scripts/train/finetune_gpu.py            # ~35 min on a GTX 1660 Ti
+python scripts/train/export_onnx.py --quantize
+python scripts/bench/score_model.py --model public/models/detector_v2_finetuned_int8.onnx --meta public/models/detector_v2_finetuned_meta.json --eval-sets docs/benchmark/matched_control_v1
+python scripts/bench/calibrate_onnx.py          # temperature and abstention band
 ```
 
 To train on a GPU, see **[docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md)**,
@@ -177,9 +225,12 @@ The evaluation protocol is fixed and versioned in
 npm test
 ```
 
-12 regression tests, no new dependencies (Node's built-in runner). The central
+23 regression tests, no new dependencies (Node's built-in runner). The central
 one pins the output striding with four batch items whose dominant classes
-differ, so an indexing error cannot pass by coincidence.
+differ, so an indexing error cannot pass by coincidence. Others pin the
+temperature divisor to its contract, so a model swap cannot double-apply
+calibration, and pin the abstention band to reporting its external measurement
+rather than its fitting-set one.
 
 ---
 
@@ -209,7 +260,9 @@ Specific limits of the numbers here:
   graphics, product renders and screenshots. This makes the control
   conservative — label noise depresses the score — but it is not a clean
   photographic corpus.
-- **A 25% abstention rate is real cost.** One image in four gets no answer.
+- **A 14% abstention rate is real cost.** About one image in seven gets no
+  answer, and the measured false-positive rate on images it does rule on is
+  6.9%, not the 5% the band was fitted to.
 - **~0.7–0.9 s per image** single-threaded WASM, measured in-browser, plus a
   one-off session initialisation of ~1.4 s warm (up to ~30 s on a cold cache
   while the 25 MB graph is fetched and optimised).

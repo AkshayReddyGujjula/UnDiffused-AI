@@ -71,8 +71,11 @@ to catch its own replacement cheating.
 | Model | Held-out AUROC | Notes |
 |---|---|---|
 | v1 shipped | **0.50** | caught 0 of 50 |
-| v2 frozen probe (**currently shipping**) | **0.894** | int8, on `matched_control_v1` |
-| v2 fine-tuned (**trained, not yet shipped**) | **0.954** | int8, same set; 0.948–0.958 under laundering |
+| v2 frozen probe | **0.894** | int8, on `matched_control_v1` |
+| v2 fine-tuned (**now shipping**) | **0.954** | int8, same set; 0.948–0.958 under laundering |
+
+Calibration of the shipped fine-tune (`docs/benchmark/v2_finetuned_calibration.json`):
+temperature **1.9077**, band **0.2102 / 0.6482**, ECE 0.061 → **0.022**.
 
 Fine-tune fp32: val 0.9696 · test 0.9602 · **held-out SDXL 0.9720**.
 Training: 8 epochs, ~4.3 min/epoch on the 1660 Ti, best epoch 5 auto-saved.
@@ -81,44 +84,48 @@ Training: 8 epochs, ~4.3 min/epoch on the 1660 Ti, best epoch 5 auto-saved.
 
 ## EXACTLY WHERE WE ARE
 
-The fine-tune **won** and is exported, quantized and scored. It is **not yet
-shipped**, deliberately.
+The fine-tune won, was calibrated, and **is now the shipped model** on the
+laptop side. Calibration ran on the desktop and produced temperature **1.9077**
+and band **0.2102 / 0.6482**; both are in `contract.ts`.
 
-**Why not:** the extension's three-state thresholds (`likely authentic` < 0.545,
-`likely AI` > 0.846) and its claim of "~25% abstention at ~5% FPR" were fitted to
-the **probe's** score distribution. The fine-tune was exported *without*
-calibration (raw `sigmoid(logit)`), and its ECE rose to ~0.07. Dropping it in
-behind the old thresholds would give a real AUROC with **wrong verdict labels and
-a false stated FPR** — unacceptable for a project whose whole pitch is calibrated
-honesty.
+Done on the laptop (committed, pushed):
 
-### Next action (desktop)
+- `contract.ts` — `DETECTOR_V2` renamed to `detector_v2_finetuned` and given a
+  `temperature` field; `DETECTOR_V2_PROBE` added alongside it with
+  `temperature: 1.0`. `logitsToAiProbabilities` now takes a temperature,
+  defaulting to the shipped model's, and rejects a non-positive one.
+- `ABSTENTION_BAND` — new thresholds. The `measured*` fields carry the
+  **external** numbers (abstain 14.25%, FPR **6.88%**, TPR 93.77%), not the
+  validation fit's 4.97% FPR. The val fit is kept in `fittedOnVal` as provenance.
+- `DETECTOR_V2_CALIBRATION` — re-measured; `shortcutGap` and `unmatchedAuroc`
+  are now `null` because that comparison has not been re-run for this model.
+- Model path repointed in `pipeline.ts`, `manifest.json`, `browser_check.html`.
+- `browser_check.html` no longer hardcodes thresholds; it reads `ABSTENTION_BAND`.
+- README re-stated against the fine-tune's numbers.
+- 23 tests pass (was 17); `npm run build` clean.
 
-```bash
-python scripts/bench/calibrate_onnx.py
-```
+### Why the temperature lives on the contract, not in the parser
 
-~5 min. Reconstructs the exact training val split (same seed and `pair_id`
-grouping as `finetune_gpu.py`), fits a temperature by NLL, picks the band at 5%
-FPR under a 25% abstention ceiling, and reports the band's real behaviour on the
-external `matched_control_v1`. Prints a `COPY THESE INTO contract.ts` block.
+The probe's graph has its temperature **folded in** at export; the fine-tune's
+does not. A bare `logit / 1.9077` inside `logitsToAiProbabilities` would
+double-apply the moment anyone repointed at the probe, and would do so silently
+— the output stays in [0, 1] and looks fine. The divisor therefore travels with
+the model contract, and a test pins that.
 
-### Then, in order
+### Remaining, on the desktop, in order
 
-1. **Laptop:** update `src/content/inference/contract.ts` — add the fitted
-   `temperature` (divide the logit by it before `sigmoid` in
-   `logitsToAiProbabilities`), set the new `ABSTENTION_BAND` low/high, update
-   `DETECTOR_V2_CALIBRATION` numbers.
-2. **Laptop:** repoint the extension from `detector_v2_probe_int8.onnx` to
-   `detector_v2_finetuned_int8.onnx` in `src/content/inference/pipeline.ts`,
-   `manifest.json` (`web_accessible_resources`), and
-   `scripts/verify/browser_check.html`. Push.
-3. **Desktop:** `git pull && npm run build`
-4. **Desktop:** browser check — `python -m http.server 8899`, open
-   `http://127.0.0.1:8899/scripts/verify/browser_check.html`, require
-   `BROWSER_CHECK_PASS`.
-5. **Desktop:** load `dist/` unpacked, confirm right-click scan works, commit,
-   push.
+1. `git pull`
+2. `npm run build`
+3. `npm run verify:bundle` — **required**, and easy to miss:
+   `scripts/verify/contract.mjs` is gitignored and regenerated from
+   `contract.ts`. Skip it and the browser check silently verifies the *old*
+   thresholds.
+4. `python -m http.server 8899` then open
+   `http://127.0.0.1:8899/scripts/verify/browser_check.html` — require
+   `BROWSER_CHECK_PASS`, and sanity-check that the logged `P(AI)` values are
+   spread across the new band rather than clustered above 0.648.
+5. Load `dist/` unpacked at `chrome://extensions` (reload the extension **and**
+   the test tab), confirm right-click scan works, then commit and push.
 
 ---
 
@@ -132,6 +139,10 @@ external `matched_control_v1`. Prints a `COPY THESE INTO contract.ts` block.
   `--eval-sets ../../docs/benchmark/matched_control_v1`, or it silently skips
   everything. (Defaults now also resolve against repo root.)
 - **Quantize `MatMul` only.** Never let `ConvInteger` into a shipped graph.
+- **`npm run verify:bundle` after every `contract.ts` change.**
+  `scripts/verify/contract.mjs` is gitignored and built from `contract.ts`.
+  A stale one makes `browser_check.html` verify thresholds that are no longer
+  shipped, and it still prints `BROWSER_CHECK_PASS`.
 - **`dist/` is untracked now.** It was committed before `.gitignore` listed it,
   and every `npm run build` on two machines caused pull conflicts.
 - **Right-click needed two fixes:** (a) manifest content scripts only inject on

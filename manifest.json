@@ -41,8 +41,8 @@
     "web_accessible_resources": [
         {
             "resources": [
-                "models/detector_v2_probe_int8.onnx",
-                "models/detector_v2_probe_meta.json",
+                "models/detector_v2_finetuned_int8.onnx",
+                "models/detector_v2_finetuned_meta.json",
                 "wasm/ort-wasm-simd.wasm",
                 "wasm/ort-wasm.wasm",
                 "wasm/ort-wasm-threaded.wasm",

@@ -29,6 +29,10 @@ import {
     assertOutputShape,
     logitsToAiProbabilities,
     sigmoid,
+    DETECTOR_V2,
+    DETECTOR_V2_PROBE,
+    ABSTENTION_BAND,
+    toVerdict,
 } from './bundle.mjs';
 
 const GLOBAL = MODEL_CONTRACTS.global;
@@ -153,15 +157,17 @@ test('contracts match the shipped ONNX graphs', () => {
 // of going through this parser. These pin both accepted shapes.
 
 test('rank-1 [batch] output is accepted (the shape the model actually emits)', () => {
-    const p = logitsToAiProbabilities(new Float32Array([0, 2, -2]), [3]);
+    // Temperature 1 is passed explicitly: this pins shape handling, which must
+    // not shift when a recalibration changes the shipped temperature.
+    const p = logitsToAiProbabilities(new Float32Array([0, 2, -2]), [3], 1);
     assert.equal(p.length, 3);
     assert.ok(Math.abs(p[0] - 0.5) < 1e-12);
     assert.ok(p[1] > 0.85 && p[2] < 0.15);
 });
 
 test('rank-2 [batch, 1] output is also accepted', () => {
-    const a = logitsToAiProbabilities(new Float32Array([0, 2, -2]), [3, 1]);
-    const b = logitsToAiProbabilities(new Float32Array([0, 2, -2]), [3]);
+    const a = logitsToAiProbabilities(new Float32Array([0, 2, -2]), [3, 1], 1);
+    const b = logitsToAiProbabilities(new Float32Array([0, 2, -2]), [3], 1);
     a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-12));
 });
 
@@ -180,4 +186,74 @@ test('a short output buffer throws instead of reading undefined', () => {
 test('sigmoid maps a logit to P(AI) and is monotonic', () => {
     assert.ok(Math.abs(sigmoid(0) - 0.5) < 1e-12);
     assert.ok(sigmoid(3) > sigmoid(1) && sigmoid(1) > sigmoid(-1));
+});
+
+
+// --- temperature scaling ----------------------------------------------------
+// The fine-tuned graph emits a raw logit; the probe's graph had its temperature
+// folded in at export. The divisor therefore lives on the contract, not in the
+// parser, so that repointing between the two cannot double-apply it. These pin
+// that arrangement -- a silently double-scaled probability is exactly the kind
+// of finite, plausible-looking wrong number this suite exists to catch.
+
+test('the shipped temperature is applied by default', () => {
+    const [p] = logitsToAiProbabilities(new Float32Array([2]), [1]);
+    assert.ok(Math.abs(p - sigmoid(2 / DETECTOR_V2.temperature)) < 1e-12);
+    // Temperature > 1 pulls confidence toward 0.5, so it must differ from raw.
+    assert.ok(p < sigmoid(2));
+});
+
+test('temperature > 1 shrinks confidence without reordering scores', () => {
+    const logits = new Float32Array([-3, -0.5, 0, 0.5, 3]);
+    const hot = logitsToAiProbabilities(logits, [5], 1);
+    const cal = logitsToAiProbabilities(logits, [5], DETECTOR_V2.temperature);
+
+    for (let i = 1; i < hot.length; i++) {
+        assert.ok(cal[i] > cal[i - 1], 'ranking must be preserved');
+    }
+    // AUROC is rank-based, so calibration cannot change it -- only the verdict
+    // thresholds it is read against.
+    assert.ok(Math.abs(cal[2] - 0.5) < 1e-12);
+    assert.ok(cal[0] > hot[0] && cal[4] < hot[4]);
+});
+
+test('the probe contract declares temperature 1 because its graph folds it in', () => {
+    assert.equal(DETECTOR_V2_PROBE.temperature, 1);
+    assert.equal(DETECTOR_V2_PROBE.name, 'detector_v2_probe');
+    assert.equal(DETECTOR_V2.name, 'detector_v2_finetuned');
+    assert.ok(DETECTOR_V2.temperature > 1);
+});
+
+test('a non-positive or non-finite temperature throws instead of inverting', () => {
+    for (const bad of [0, -1, NaN, Infinity]) {
+        assert.throws(() => logitsToAiProbabilities(new Float32Array([1]), [1], bad),
+                      ModelContractError, `temperature ${bad} must be rejected`);
+    }
+});
+
+
+// --- the abstention band ----------------------------------------------------
+
+test('the band is ordered and maps to three states', () => {
+    assert.ok(ABSTENTION_BAND.low < ABSTENTION_BAND.high);
+    assert.equal(toVerdict(ABSTENTION_BAND.low - 1e-6), 'likely_authentic');
+    assert.equal(toVerdict(ABSTENTION_BAND.high + 1e-6), 'likely_ai');
+    assert.equal(toVerdict((ABSTENTION_BAND.low + ABSTENTION_BAND.high) / 2),
+                 'inconclusive');
+    // Both edges are inclusive of the inconclusive band: an image landing
+    // exactly on a threshold gets no verdict rather than the adjacent one.
+    assert.equal(toVerdict(ABSTENTION_BAND.low), 'inconclusive');
+    assert.equal(toVerdict(ABSTENTION_BAND.high), 'inconclusive');
+});
+
+test('the band reports its external measurement, not its fitting-set numbers', () => {
+    // The band was fitted to 5% FPR on validation and measures 6.88% on the
+    // external set. Shipping the 4.97% would be quoting a fitting-set number as
+    // a deployment number. This pins which one the UI is allowed to read.
+    assert.equal(ABSTENTION_BAND.measuredFpr, 0.0688);
+    assert.ok(ABSTENTION_BAND.measuredFpr > ABSTENTION_BAND.fittedOnVal.fpr,
+              'the external FPR is the honest, larger number');
+    assert.ok(ABSTENTION_BAND.fittedOnVal.fpr <= ABSTENTION_BAND.fittedOnVal.targetFpr);
+    assert.ok(ABSTENTION_BAND.measuredAbstainRate < ABSTENTION_BAND.fittedOnVal.maxAbstain);
+    assert.match(ABSTENTION_BAND.measuredOn, /matched_control_v1/);
 });

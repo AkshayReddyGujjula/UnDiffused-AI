@@ -212,14 +212,51 @@ export function toAiProbability(
 
 /**
  * The v2 contract. Unlike the two v1 checkpoints, every value here was read off
- * the exported graph by scripts/train/export_probe_onnx.py rather than written
- * by hand, and the model has been scored on a stated benchmark.
+ * the exported graph by scripts/train/export_onnx.py rather than written by
+ * hand, and the model has been scored on a stated benchmark.
  *
  * The head emits a single logit, so there is no class-index question to get
- * wrong: P(AI) = sigmoid(logit). Temperature scaling and the feature scaler are
- * folded into the linear layer, so the logit is already calibrated.
+ * wrong: P(AI) = sigmoid(logit / temperature).
+ *
+ * `temperature` is on the contract rather than hardcoded in the parser on
+ * purpose. The two v2 models differ in where calibration lives: the frozen
+ * probe had its temperature folded into the linear layer at export time and so
+ * emits an already-calibrated logit (temperature 1.0 here), while the
+ * fine-tuned graph emits a raw one and is scaled at read time. A bare divisor
+ * inside logitsToAiProbabilities would silently double-apply the moment anyone
+ * repointed at the probe. Binding the divisor to the model that needs it makes
+ * that class of mistake impossible rather than merely unlikely.
  */
-export const DETECTOR_V2: ModelContract & { singleLogit: true } = {
+export const DETECTOR_V2: ModelContract & {
+    singleLogit: true;
+    temperature: number;
+} = {
+    name: 'detector_v2_finetuned',
+    inputName: 'pixel_values',
+    outputName: 'logits',
+    numClasses: 1,
+    aiClassIndex: 0,
+    mean: IMAGENET_MEAN,
+    std: IMAGENET_STD,
+    inputSize: 224,
+    singleLogit: true,
+    // Fitted by NLL on the reconstructed training validation split (750 images,
+    // same seed and pair_id grouping as finetune_gpu.py, SDXL held out).
+    // Lowered ECE from 0.0608 to 0.0237. See
+    // docs/benchmark/v2_finetuned_calibration.json.
+    temperature: 1.9077,
+};
+
+/**
+ * The previously shipped frozen probe, kept as a contract so that repointing
+ * back to it is a one-line change that carries its own calibration with it.
+ * Its temperature is 1.0 because export_probe_onnx.py folded 1.4137 into the
+ * graph's final linear layer -- that logit arrives calibrated.
+ */
+export const DETECTOR_V2_PROBE: ModelContract & {
+    singleLogit: true;
+    temperature: number;
+} = {
     name: 'detector_v2_probe',
     inputName: 'pixel_values',
     outputName: 'logits',
@@ -229,50 +266,95 @@ export const DETECTOR_V2: ModelContract & { singleLogit: true } = {
     std: IMAGENET_STD,
     inputSize: 224,
     singleLogit: true,
+    temperature: 1.0,
 };
 
 /**
- * Measured performance of DETECTOR_V2, from docs/benchmark/v2_matched_probe.json.
+ * Measured performance of DETECTOR_V2, from
+ * docs/benchmark/v2_finetuned_results.json (scores) and
+ * docs/benchmark/v2_finetuned_calibration.json (temperature and band).
  *
- * The headline is `heldoutGeneratorAuroc`: SDXL never appeared in training, and
- * the evaluation pairs each real photograph with a render made from that same
- * photograph's caption, so content is held constant and only authenticity
- * varies.
+ * Every figure is measured on the shipped int8 file, not on the fp32 checkpoint
+ * it was exported from, because int8 quantization is lossy and the browser runs
+ * the int8 graph. The fp32 fine-tune scored 0.9602 on its own test split and
+ * 0.9720 on held-out SDXL; those are training-side numbers and belong in the
+ * training record, not in the contract the extension asserts.
  *
- * `shortcutGap` is the difference between the unmatched and matched scores. An
- * earlier model trained on mismatched corpora had a gap of 0.32 -- it was
- * separating datasets, not detecting generation. This one is -0.008, meaning it
- * behaves the same whether or not content is matched.
+ * `matchedAuroc` is the headline: 800 content-matched pairs in
+ * matched_control_v1, external to training, each real photograph paired with a
+ * render made from that same photograph's caption, so content is held constant
+ * and only authenticity varies.
+ *
+ * `heldoutGeneratorAuroc` is the SDXL subset of that same external set. SDXL
+ * was excluded from training entirely.
+ *
+ * `shortcutGap` is deliberately null. The probe's -0.008 gap was measured by
+ * scoring it on an unmatched corpus as well as a matched one; that comparison
+ * has not been re-run for the fine-tune. The fine-tune was trained on the same
+ * content-matched pairs, so the structural argument carries over -- but the
+ * number does not, and carrying forward a figure measured on a different model
+ * is the exact move this file exists to prevent.
  */
 export const DETECTOR_V2_CALIBRATION = {
     calibrated: true,
-    testAuroc: 0.8845,
-    heldoutGeneratorAuroc: 0.9076,
-    unmatchedAuroc: 0.8768,
-    shortcutGap: -0.0077,
+    matchedAuroc: 0.9543,
+    matchedAurocCi95: [0.94, 0.9668],
+    heldoutGeneratorAuroc: 0.9617,
+    calibratedEce: 0.0222,
+    unmatchedAuroc: null,
+    shortcutGap: null,
+    previousShippedAuroc: 0.894,
     v1ShippedAuroc: 0.5,
-    benchmark: 'docs/benchmark/v2_matched_probe.json',
+    benchmark: 'docs/benchmark/v2_finetuned_results.json',
+    calibrationRecord: 'docs/benchmark/v2_finetuned_calibration.json',
 } as const;
 
 /**
- * The abstention band, chosen on a validation split against a 5% false-positive
- * target under a 25% abstention ceiling fixed in advance.
+ * The abstention band, chosen on the reconstructed training validation split
+ * against a 5% false-positive target under a 25% abstention ceiling fixed in
+ * advance. Thresholds apply to the *calibrated* probability, sigmoid(logit / T),
+ * so they move if the temperature moves.
  *
  * Below `low` -> likely authentic. Above `high` -> likely AI generated.
  * Between -> inconclusive, and the extension says so rather than guessing.
  *
- * The measured cost is explicit: it abstains on about one image in four and
- * catches roughly 70% of generated images among those it does rule on. Widening
- * the band would raise precision and abstain more; narrowing it would accuse
- * more real photographs. Wrongly calling a genuine photograph fake is the more
- * damaging error, which is why the band is tuned to FPR rather than accuracy.
+ * The `measured*` fields are the band's behaviour on matched_control_v1 -- 800
+ * pairs external to both training and the fit -- and NOT the validation numbers
+ * it was fitted against. Those differ, and the difference matters:
+ *
+ *     fitted on val (750 imgs):  abstain 15.87%  FPR 4.97%  TPR 93.85%
+ *     measured external (800):   abstain 14.25%  FPR 6.88%  TPR 93.77%
+ *
+ * A band fitted to hit 5% delivers 6.9% on data it has never seen. Reporting
+ * the 4.97% would be quoting a fitting-set number as a deployment number, which
+ * is a smaller version of the failure this whole repository documents. The
+ * external figure is what the extension claims; the val fit is kept below only
+ * as provenance for how the thresholds were chosen.
+ *
+ * Re-fitting the band on matched_control_v1 would recover the advertised 5%,
+ * and was rejected: it would consume the only clean external measurement of the
+ * shipped thresholds in exchange for a nicer-sounding number.
+ *
+ * Wrongly calling a genuine photograph fake is the more damaging error, which
+ * is why the band is tuned to FPR rather than accuracy.
  */
 export const ABSTENTION_BAND = {
-    low: 0.5448,
-    high: 0.8461,
-    measuredAbstainRate: 0.2493,
-    measuredFpr: 0.0488,
-    measuredTpr: 0.6979,
+    low: 0.2102,
+    high: 0.6482,
+    // Measured on matched_control_v1 (n=800), external to training and to the fit.
+    measuredAbstainRate: 0.1425,
+    measuredFpr: 0.0688,
+    measuredTpr: 0.9377,
+    measuredOn: 'matched_control_v1 (n=800), external',
+    // Provenance: what the fit itself reported on the validation split.
+    fittedOnVal: {
+        abstainRate: 0.1587,
+        fpr: 0.0497,
+        tpr: 0.9385,
+        targetFpr: 0.05,
+        maxAbstain: 0.25,
+        n: 750,
+    },
 } as const;
 
 export type Verdict = 'likely_authentic' | 'inconclusive' | 'likely_ai';
@@ -290,14 +372,20 @@ export function sigmoid(logit: number): number {
 }
 
 /**
- * Read a [batch, 1] output into per-image AI probabilities.
+ * Read a [batch, 1] output into per-image *calibrated* AI probabilities.
  *
  * Shares the striding discipline of logitsToDistributions: index by
  * `i * classCount`, never by `i`.
+ *
+ * `temperature` defaults to the shipped model's, so a caller that passes a raw
+ * graph output gets the calibrated probability without having to remember.
+ * Scoring a different model means passing that model's temperature; a model
+ * whose calibration is already folded into its graph passes 1.
  */
 export function logitsToAiProbabilities(
     outputData: Float32Array | number[],
-    dims: readonly number[]
+    dims: readonly number[],
+    temperature: number = DETECTOR_V2.temperature
 ): number[] {
     // The exported head ends in .squeeze(-1), so ONNX reports the output as
     // rank-1 [batch] rather than rank-2 [batch, 1]. Both are accepted: they
@@ -321,7 +409,17 @@ export function logitsToAiProbabilities(
         );
     }
 
+    if (!Number.isFinite(temperature) || temperature <= 0) {
+        throw new ModelContractError(
+            `detector_v2: temperature must be a finite positive number, got ` +
+            `${temperature}. A zero or negative divisor would explode or invert ` +
+            `the verdict while still returning a plausible-looking number in [0,1].`
+        );
+    }
+
     const out: number[] = [];
-    for (let i = 0; i < batch; i++) out.push(sigmoid(Number(outputData[i])));
+    for (let i = 0; i < batch; i++) {
+        out.push(sigmoid(Number(outputData[i]) / temperature));
+    }
     return out;
 }
