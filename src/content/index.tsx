@@ -9,6 +9,24 @@ import { createRoot } from 'react-dom/client';
 import { Scanner } from './Scanner';
 import { injectStyles } from './styles';
 import { injectForensicStyles } from './forensic-styles';
+import { isScannerReady } from './ready';
+
+/**
+ * Answer readiness pings from the background worker.
+ *
+ * Registered at module scope so it exists the instant the content script runs,
+ * rather than after React mounts. The background injects this script into tabs
+ * that predate the extension being loaded, then polls PING until `ready` is
+ * true before sending a scan request. Without this the first right-click after
+ * an extension reload silently does nothing.
+ */
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if ((message as { type?: string })?.type === 'PING') {
+        sendResponse({ alive: true, ready: isScannerReady() });
+        return undefined;
+    }
+    return undefined;
+});
 
 // Avoid multiple injections
 if (!document.getElementById('undiffused-root')) {

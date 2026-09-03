@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { setScannerReady } from './ready';
 import { GlassCard } from '../components/GlassCard';
 import { ResultView, ScanResult } from '../components/ResultView';
 import { ForensicToolsPanel } from '../components/ForensicToolsPanel';
@@ -173,9 +174,16 @@ export const Scanner: React.FC = () => {
     };
 
     useEffect(() => {
-        const handleMessage = async (
+        // Deliberately NOT async. Chrome keeps the message port open only when a
+        // listener returns literal `true`; an async function returns a Promise,
+        // which is truthy but not `true`, so Chrome closes the port and the
+        // sender's sendMessage rejects with "The message port closed before a
+        // response was received" -- even though the scan started fine. Nothing
+        // in this body awaits, so the async was never needed.
+        const handleMessage = (
             message: unknown,
-            sender: chrome.runtime.MessageSender
+            sender: chrome.runtime.MessageSender,
+            sendResponse: (response?: unknown) => void
         ) => {
             if (sender.id && sender.id !== chrome.runtime.id) {
                 return;
@@ -190,6 +198,8 @@ export const Scanner: React.FC = () => {
             }
 
             if (typed.type === 'SCANNING' && typeof typed.imageUrl === 'string') {
+                // Acknowledge synchronously so the background's await resolves.
+                sendResponse({ received: true });
                 isShuttingDownRef.current = false;
                 scanTokenRef.current += 1;
 
@@ -210,7 +220,13 @@ export const Scanner: React.FC = () => {
         };
 
         chrome.runtime.onMessage.addListener(handleMessage);
-        return () => chrome.runtime.onMessage.removeListener(handleMessage);
+        // Only now can a scan request actually be received. The background
+        // polls for this before sending one.
+        setScannerReady(true);
+        return () => {
+            setScannerReady(false);
+            chrome.runtime.onMessage.removeListener(handleMessage);
+        };
     }, []);
 
     // ... (Drag handlers truncated for brevity, assume same as before) ...

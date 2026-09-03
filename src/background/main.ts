@@ -1,7 +1,7 @@
 /**
  * UnDiffused Background Service Worker
  * =====================================
- * Handles context menu, offscreen document lifecycle, and message routing.
+ * Context menu, content-script lifecycle, and message routing.
  */
 
 type FetchImageMessage = {
@@ -40,7 +40,76 @@ function isValidImageUrl(rawUrl: string): boolean {
     }
 }
 
+/**
+ * Ensure the tab has a live, listening content script, injecting one if needed.
+ *
+ * Manifest-declared content scripts are injected only when a page loads. Every
+ * tab that was already open when the extension was installed, reloaded or
+ * updated therefore has none, and chrome.tabs.sendMessage fails with
+ * "Could not establish connection. Receiving end does not exist."
+ *
+ * The previous version caught that and logged a warning, so from the user's
+ * side right-click did nothing at all. This injects on demand, then waits for
+ * the Scanner to actually mount -- its SCANNING listener is registered inside a
+ * React effect, so "the script has run" and "the script can receive a scan"
+ * are two different moments, and a message sent between them is dropped.
+ */
+async function ensureContentScript(tabId: number): Promise<boolean> {
+    const ping = async (): Promise<{ alive?: boolean; ready?: boolean } | null> => {
+        try {
+            return await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+        } catch {
+            return null;
+        }
+    };
 
+    let status = await ping();
+
+    if (!status?.alive) {
+        // Read the built filename from the manifest rather than hardcoding it:
+        // the bundler emits a content-hashed name that changes every build.
+        const files = chrome.runtime.getManifest().content_scripts?.[0]?.js;
+        if (!files?.length) {
+            console.error('[UnDiffused] No content script declared in the manifest.');
+            return false;
+        }
+        try {
+            await chrome.scripting.executeScript({ target: { tabId }, files });
+        } catch (e) {
+            // Restricted pages cannot be scripted at all: chrome://, the Chrome
+            // Web Store, the PDF viewer, and file:// without the opt-in.
+            console.error('[UnDiffused] Cannot inject into this tab:', e);
+            return false;
+        }
+    }
+
+    // Wait for React to mount and register the SCANNING listener (up to ~4s).
+    for (let attempt = 0; attempt < 40; attempt++) {
+        status = await ping();
+        if (status?.ready) return true;
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    console.error('[UnDiffused] Content script injected but never became ready.');
+    return false;
+}
+
+/**
+ * Surface a failure to the user instead of only to the console.
+ *
+ * A scan that silently does nothing is indistinguishable from a broken
+ * extension, which is exactly how the previous bug presented.
+ */
+function reportUnavailable(reason: string): void {
+    console.error('[UnDiffused]', reason);
+    chrome.action.setBadgeText({ text: '!' });
+    chrome.action.setBadgeBackgroundColor({ color: '#dc2626' });
+    chrome.action.setTitle({ title: 'UnDiffused: ' + reason });
+    setTimeout(() => {
+        chrome.action.setBadgeText({ text: '' });
+        chrome.action.setTitle({ title: 'UnDiffused' });
+    }, 6000);
+}
 
 /**
  * Handle context menu click
@@ -54,36 +123,62 @@ async function handleContextMenuClick(
 
     console.log('[UnDiffused] Triggering scan for:', info.srcUrl);
 
-    // Notify content script to start scanning
-    // The content script will handle the inference locally
+    const ready = await ensureContentScript(tab.id);
+    if (!ready) {
+        reportUnavailable('cannot scan on this page - try reloading the tab');
+        return;
+    }
+
     try {
         await chrome.tabs.sendMessage(tab.id, {
             type: 'SCANNING',
             imageUrl: info.srcUrl
         });
     } catch (e) {
-        console.warn('[UnDiffused] Could not notify content script:', e);
-        // If content script isn't loaded (e.g. extension updated/reloaded), 
-        // we might need to inject it or alert user to refresh.
+        // Readiness was already confirmed by ensureContentScript, so a closed
+        // message port here means the listener acknowledged and moved on rather
+        // than that the scan failed. Only a genuine connection loss is an error.
+        const msg = String((e as Error)?.message ?? e);
+        if (msg.includes('message port closed')) {
+            console.debug('[UnDiffused] port closed after dispatch (scan is running)');
+            return;
+        }
+        console.error('[UnDiffused] sendMessage failed after readiness:', e);
+        reportUnavailable('scan request failed - try reloading the tab');
     }
 }
 
-// Create context menu on extension install
-chrome.runtime.onInstalled.addListener(() => {
-    chrome.contextMenus.create({
-        id: 'undiffused-scan',
-        title: '🔍 Scan with UnDiffused',
-        contexts: ['image']
+/**
+ * Register the context menu.
+ *
+ * removeAll() first because create() throws "Cannot create item with duplicate
+ * id" when the entry already exists, which happens on reload.
+ */
+function registerContextMenu(): void {
+    chrome.contextMenus.removeAll(() => {
+        chrome.contextMenus.create({
+            id: 'undiffused-scan',
+            title: 'Scan with UnDiffused',
+            contexts: ['image']
+        }, () => {
+            if (chrome.runtime.lastError) {
+                console.error('[UnDiffused] Context menu:', chrome.runtime.lastError.message);
+            } else {
+                console.log('[UnDiffused] Context menu created');
+            }
+        });
     });
+}
 
-    console.log('[UnDiffused] Context menu created');
-});
+chrome.runtime.onInstalled.addListener(registerContextMenu);
+// The service worker is torn down when idle and menus must survive a browser
+// restart, which onInstalled does not cover.
+chrome.runtime.onStartup.addListener(registerContextMenu);
 
 // Listen for context menu clicks
 chrome.contextMenus.onClicked.addListener(handleContextMenuClick);
 
-// Listen for messages from popup
-// Listen for messages from popup
+// Listen for messages from popup and content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (sender.id && sender.id !== chrome.runtime.id) {
         sendResponse({ success: false, error: 'Unauthorized sender' });
@@ -142,7 +237,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return;
         }
 
-        // Get the active tab
         chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
             const activeTab = tabs[0];
             if (!activeTab?.id) {
@@ -151,8 +245,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
 
             try {
-                // Notify content script to show "Scanning" state immediately
-                // The content script will handle the inference itself
+                const ready = await ensureContentScript(activeTab.id);
+                if (!ready) {
+                    reportUnavailable('cannot scan on this page - try reloading the tab');
+                    sendResponse({ success: false, error: 'Content script unavailable' });
+                    return;
+                }
+
                 await chrome.tabs.sendMessage(activeTab.id, {
                     type: 'SCANNING',
                     imageUrl: dataUrl
@@ -163,7 +262,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             } catch (error: any) {
                 console.error('[UnDiffused] Popup scan failed:', error);
 
-                // Notify content script of error
                 chrome.tabs.sendMessage(activeTab.id, {
                     type: 'ERROR',
                     error: error.message || 'Scan trigger failed'

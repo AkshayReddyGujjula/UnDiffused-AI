@@ -1,6 +1,6 @@
 {
   "../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-C6UgR7CS.js",
+    "file": "assets/crx-manifest.js-CBwX_afW.js",
     "name": "crx-manifest.js",
     "src": "../../../../../@crx/manifest",
     "isEntry": true
@@ -23,22 +23,22 @@
     "file": "assets/index-Rxq3h4or.css",
     "src": "_index-Rxq3h4or.css"
   },
-  "_index.tsx-loader-e-Y10pwO.js": {
-    "file": "assets/index.tsx-loader-e-Y10pwO.js",
-    "src": "_index.tsx-loader-e-Y10pwO.js"
+  "_index.tsx-loader-wPxoY50V.js": {
+    "file": "assets/index.tsx-loader-wPxoY50V.js",
+    "src": "_index.tsx-loader-wPxoY50V.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
     "name": "modulepreload-polyfill"
   },
   "src/background/main.ts": {
-    "file": "assets/main.ts-DCU1UXOY.js",
+    "file": "assets/main.ts-NPtaW4n5.js",
     "name": "main.ts",
     "src": "src/background/main.ts",
     "isEntry": true
   },
   "src/content/index.tsx": {
-    "file": "assets/index.tsx-DMiLjqjY.js",
+    "file": "assets/index.tsx-BG-vQIhd.js",
     "name": "index.tsx",
     "src": "src/content/index.tsx",
     "isEntry": true,
