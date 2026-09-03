@@ -41,8 +41,15 @@ npm install && npm run build
 `chrome://extensions` → Developer mode → Load unpacked → `dist/`.
 Right-click an image → *Scan with UnDiffused*. Try a real photo and an AI image.
 
-Expect: a three-state verdict, not a percentage. First scan takes ~30 s while
-the model initialises; after that ~0.4–1.8 s per image.
+Expect a three-state verdict, not a percentage. The first scan takes up to ~30 s
+while the 25 MB model is fetched and optimised; after that ~0.7–0.9 s per image.
+
+**If right-click does nothing**, that was a real bug and it is fixed — but the
+fix only applies to a freshly loaded build. Reload the extension at
+`chrome://extensions`, then reload the tab you are testing on. If it still does
+nothing, open the service-worker console (the "service worker" link on the
+extension card) and look for `[UnDiffused]` lines; failures now show a red `!`
+badge on the toolbar icon with the reason in its tooltip.
 
 ### 3. Train on the 1660 Ti (1–2 hrs, mostly waiting)
 
@@ -81,7 +88,7 @@ bug that every Python check missed.
 | Piece | Status |
 |---|---|
 | v1 baseline measured | done — `docs/benchmark/v1_baseline.json` |
-| Parsing bug fixed, contract asserted | done — 12 tests passing |
+| Parsing bug fixed, contract asserted | done — 17 tests passing |
 | Laundering suite, holdout, confound control | done — `scripts/bench/laundering.py` |
 | Content-matched corpus (4047 pairs) | done — on disk, gitignored, re-fetchable |
 | DINOv2 features cached | done — `docs/benchmark/corpus_v1/features/` |
@@ -90,7 +97,9 @@ bug that every Python check missed.
 | Browser runtime verified | done — `BROWSER_CHECK_PASS` |
 | Extension rewired to v2 | done — builds clean |
 | README rewritten | done |
-| GPU fine-tune | **not run** — needs your desktop |
+| Right-click flow fixed | done — on-demand injection, visible failures |
+| GPU pipeline smoke-tested | done — full path exercised on CPU |
+| GPU fine-tune at scale | **not run** — needs your desktop |
 | C2PA provenance layer | not started |
 
 ---
@@ -130,6 +139,6 @@ Roughly in order of value per hour:
 3. **Fine-tune, then distil.** Only worth it after fine-tuning shows a gain.
 4. **Trim the package.** `public/wasm/` is ~87 MB of ONNX Runtime binaries;
    most builds are unused.
-5. **Narrow permissions.** `activeTab` is requested but never used, and content
-   scripts inject on all pages unconditionally. Both invite store-review
-   scrutiny.
+5. **Narrow permissions further.** `activeTab` has been removed, but content
+   scripts still inject on all pages unconditionally. With on-demand injection
+   now in place, the declarative content script could be dropped entirely.
