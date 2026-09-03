@@ -1,99 +1,134 @@
-# NEXT_STEPS — autonomous overnight run
+# Where this stands, and what to do next
 
-Rewritten after every milestone so work resumes exactly where it stopped,
-whether that resumption is Claude after a usage-limit reset or a human reading
-this in the morning.
+**Branch:** `stage1-baseline` — committed locally, **not pushed**.
+**Last updated:** 2026-09-03, morning.
 
-**Branch:** `stage1-baseline` (local only — do not push without asking)
-**Last updated:** 2026-09-02 21:55 UTC
+---
 
-## Locked direction (agreed with Akshay before he slept)
+## Read this first
 
-- Target: **Stages 2–5 of the strategy doc, scaled to CPU.**
-- Git: commit to this branch after each milestone. **No pushing.**
-- Extension: fix the parsing bug + assert the tensor contract at load time.
-  **Do not re-enable a confident verdict** on the shipped checkpoints — they
-  have been measured as noise.
-- Hardware reality: **no CUDA.** `torch 2.10.0+cpu`, `cuda.is_available() == False`.
-  591 GB free disk. Everything must be sized for CPU.
+The project works. The extension builds, loads a real model, and returns
+calibrated three-state verdicts. The headline is **0.50 → ~0.89 AUROC**, measured
+on content-matched pairs.
 
-## Status
+Three things were found along the way that are worth more than the number, and
+all three are written up in the README:
 
-| Stage | State | Evidence |
-|---|---|---|
-| 1 — ground truth on shipped models | **DONE** | `docs/benchmark/v1_baseline.json`, `v1_baseline_note.md` |
-| 2 — measurement harness | **DONE** | `laundering.py` (9 transforms), `probe_confound.py`, holdout wired into `fetch_corpus.py` |
-| 3 — data (scaled) | downloading | `fetch_corpus.py` running; SDXL held out entirely |
-| 4 — DINOv2 feature extraction (scaled) | harness ready | `extract_features.py`; eval-set features cached; 0.117 s/img on CPU |
-| 5 — head + calibration + abstention band | not started | |
-| worker.ts fix + contract assert | **DONE** | `src/content/inference/contract.ts`, `tests/parse.test.mjs` (12 passing), `npm run build` clean |
+1. The shipped model detected nothing (0.50, caught 0 of 50).
+2. A held-out-generator test certified a replacement that had learned to tell
+   two *datasets* apart (0.990 on the holdout, 0.659 on matched content).
+3. The int8 export passed every Python check and could not load in a browser
+   (`ConvInteger` has no WASM kernel).
 
-## Stage 1 headline (do not re-derive — it is settled)
+---
 
-Both shipped checkpoints score **at chance**. Every class index of both models
-has a 95% bootstrap CI containing 0.5. The extension caught **0 of 50**
-generated images and flagged **1 of 50** photographs. No preprocessing in a
-50-measurement sweep recovers signal (strongest deviation AUROC 0.341, inverted,
-consistent with noise). The parsing bug is real but repairing it changes
-0.472 → 0.445 AUROC: it was hiding an absence, not a capability.
+## Your morning, in order
 
-## OPEN RISK — read this first on resume
+### 1. Push (2 min)
 
-The feasibility probe put DINOv2-small at **0.91 AUROC** on the same 100 images
-where the shipped checkpoints scored 0.50, and it held flat (0.905–0.910)
-through every laundering transform including JPEG q30 and a screenshot
-simulation.
+Nothing has left this machine.
 
-**That flatness is a warning, not a triumph.** Generator artefacts are
-high-frequency and should degrade under recompression; semantic content does
-not. COCO is everyday scenes, while ELSA prompts come from LAION web alt-text
-(posters, product shots, news imagery). The probe may be separating
-"COCO-style scene" from "LAION-style scene" and never looking at authenticity
-at all.
+```bash
+git push -u origin stage1-baseline
+```
 
-`fetch_matched_control.py` builds the decisive control: each ELSA_D3 row's
-`url` field is the LAION original whose alt-text became the generation prompt,
-so downloading it yields a real image from the *same content distribution* as
-the render in that row. Content held constant, only authenticity varies.
+### 2. Look at the extension (10 min)
 
-- If the probe still scores ~0.9 there, the signal is real.
-- **If it falls towards chance, the 0.91 is an artefact of corpus mismatch and
-  must not be reported as a detection result.**
+```bash
+npm install && npm run build
+```
 
-Do not publish any headline number before this control has been run.
+`chrome://extensions` → Developer mode → Load unpacked → `dist/`.
+Right-click an image → *Scan with UnDiffused*. Try a real photo and an AI image.
 
-## Immediate next actions, in order
+Expect: a three-state verdict, not a percentage. First scan takes ~30 s while
+the model initialises; after that ~0.4–1.8 s per image.
 
-1. ~~Fix `worker.ts`~~ — **DONE.** Parsing extracted to `contract.ts` as pure
-   `logitsToDistributions` (strides by class count), contract asserted at load
-   and on first output shape, `aiClassIndex: null` propagates to a
-   `model_unavailable` status so the UI shows "No model verdict" instead of a
-   fabricated percentage. `npm test` runs 12 regression tests via Node's built-in
-   runner (no new deps).
-2. ~~Stage 2 harness~~ — **DONE.** `laundering.py` has 9 transforms
-   (identity, the confound control, a JPEG quality ladder, double JPEG, resize
-   chain, WebP, screenshot). `probe_confound.py` runs the full suite. ECE and
-   FPR@95TPR still to add in Stage 5's report.
-3. **Stage 3 data (scaled)** — `fetch_corpus.py` is running (2500 real + 2500
-   AI, SDXL held out entirely to `test_heldout`, eval_set_v1 row offsets
-   excluded to prevent leakage). Watch for HTTP 429; the retry/backoff handles
-   it but paging is slow.
-3b. **Matched-content control** — `fetch_matched_control.py` running, 400 pairs.
-   This gates everything downstream. See OPEN RISK above.
-4. **Stage 4 features (scaled)** — frozen DINOv2 ViT-S/14 forward pass, CPU,
-   cache embeddings to `.npy`. Budget ~0.1–0.2 s/image on CPU, so ~6k images is
-   15–20 min. Cache is the whole point: every later experiment is then seconds.
-5. **Stage 5 head** — logistic regression on cached embeddings, temperature
-   scaling on a held-out split, abstention band chosen against a target FPR with
-   an abstention ceiling of ~25%. Report against the v1 baseline of 0.50.
+### 3. Train on the 1660 Ti (1–2 hrs, mostly waiting)
 
-## Rules for the autonomous run
+Follow **[docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md)** exactly. It assumes
+no prior knowledge and every command is copy-paste.
 
-- Commit after every milestone; never leave the tree dirty across a wakeup.
-- Update the Status table above *before* committing, so a cold resume is cheap.
-- Cache every expensive computation to disk immediately (the Stage 1 run lost a
-  full inference pass to an analysis-time crash before this rule existed).
-- If a step is blocked, write the blocker here and move to the next independent
-  step rather than stalling.
-- Report unfavourable results as readily as favourable ones. The Stage 1 note
-  sets the standard: it corrected two of the audit's own predictions.
+This is optional in the sense that you already have a working model — the
+shipped one is a *frozen-backbone linear probe*. Fine-tuning the last few
+transformer blocks is what the GPU buys you, and the guide's success criterion
+is beating **0.884**.
+
+If it doesn't beat it, that is a legitimate result to report, not a failure.
+Say so and keep the probe.
+
+### 4. Re-score whatever you train
+
+```bash
+python scripts/train/export_probe_onnx.py --quantize   # or export_onnx.py for a fine-tune
+python scripts/bench/score_model.py --model public/models/<file>.onnx --meta public/models/<file>_meta.json
+```
+
+Then verify it in a browser before believing it:
+
+```bash
+python -m http.server 8899
+# open http://127.0.0.1:8899/scripts/verify/browser_check.html
+```
+
+Look for `BROWSER_CHECK_PASS`. This is the step that caught the `ConvInteger`
+bug that every Python check missed.
+
+---
+
+## State
+
+| Piece | Status |
+|---|---|
+| v1 baseline measured | done — `docs/benchmark/v1_baseline.json` |
+| Parsing bug fixed, contract asserted | done — 12 tests passing |
+| Laundering suite, holdout, confound control | done — `scripts/bench/laundering.py` |
+| Content-matched corpus (4047 pairs) | done — on disk, gitignored, re-fetchable |
+| DINOv2 features cached | done — `docs/benchmark/corpus_v1/features/` |
+| Calibrated probe + abstention band | done — `docs/benchmark/v2_matched_probe.json` |
+| ONNX export, verified twice | done — 24.9 MB int8 |
+| Browser runtime verified | done — `BROWSER_CHECK_PASS` |
+| Extension rewired to v2 | done — builds clean |
+| README rewritten | done |
+| GPU fine-tune | **not run** — needs your desktop |
+| C2PA provenance layer | not started |
+
+---
+
+## Honest gaps
+
+Worth knowing before you talk about this, because someone will ask.
+
+- **The GPU fine-tune has never been run.** `scripts/train/finetune_gpu.py` is
+  written and its data path is exercised, but no training run has completed. If
+  it errors on first use, that is why.
+- **The "real" half of the matched corpus is LAION web imagery** — includes
+  graphics, product shots and screenshots, not a clean photographic corpus. It
+  makes the score conservative rather than inflated, but it is not ideal.
+- **Four generator families, all open-source diffusion.** No Midjourney, no
+  Firefly. Cross-family generalisation beyond diffusion is untested.
+- **The 25% abstention rate is a real cost**, not a rhetorical flourish.
+- **`docs/benchmark/v2_results.json` may be mid-write** — a scoring run was in
+  flight. Re-run `score_model.py` if it looks truncated.
+- **Dead code remains**: `src/offscreen/` is bundled but never instantiated and
+  references a model file that does not exist. The audit flagged it; it is still
+  there.
+
+---
+
+## If you want to go further
+
+Roughly in order of value per hour:
+
+1. **C2PA / provenance layer.** Deterministic and always correct where a
+   signature exists. The metadata tool already parses JPEG APP1/APP13 by hand.
+   This is the one layer that cannot be wrong.
+2. **More generator families.** The single highest-leverage variable in the
+   literature. Midjourney and Firefly samples would materially strengthen the
+   claim.
+3. **Fine-tune, then distil.** Only worth it after fine-tuning shows a gain.
+4. **Trim the package.** `public/wasm/` is ~87 MB of ONNX Runtime binaries;
+   most builds are unused.
+5. **Narrow permissions.** `activeTab` is requested but never used, and content
+   scripts inject on all pages unconditionally. Both invite store-review
+   scrutiny.
