@@ -195,10 +195,26 @@ async function processMessage(e: MessageEvent): Promise<void> {
                 const BATCH_SIZE = 8;
                 for (let i = 0; i < localCrops.length; i += BATCH_SIZE) {
                     const batchCrops = localCrops.slice(i, i + BATCH_SIZE);
-                    const tensors = batchCrops.map(
-                        (crop: CropRect) => extractCropToTensor(bitmap, crop));
-                    const probs = await runInference(
-                        sessionDetector, batchTensors(tensors), DETECTOR_V2);
+
+                    // A failure here costs a patch of the heatmap, not the
+                    // verdict, so it must not take the verdict with it. The
+                    // whole-image score above has already been computed and is
+                    // the only number the user is given. Crops are explicitly
+                    // out of distribution, and the parser now throws on a
+                    // non-finite logit, so one bad tile would otherwise abort a
+                    // scan that had already succeeded.
+                    let probs: number[];
+                    try {
+                        const tensors = batchCrops.map(
+                            (crop: CropRect) => extractCropToTensor(bitmap, crop));
+                        probs = await runInference(
+                            sessionDetector, batchTensors(tensors), DETECTOR_V2);
+                    } catch (err) {
+                        console.warn(
+                            '[Worker] Evidence batch failed, verdict unaffected:',
+                            err);
+                        continue;
+                    }
 
                     probs.forEach((pAi, idx) => {
                         cropResults.push({

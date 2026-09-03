@@ -16,44 +16,7 @@ type TriggerScanMessage = {
 
 type BackgroundMessage = FetchImageMessage | TriggerScanMessage;
 
-const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'data:', 'blob:']);
-
-/**
- * Hostnames the background worker refuses to fetch.
- *
- * The background worker holds host permissions for every http(s) origin, so its
- * fetch is not bound by CORS or by the page's own origin. The URL it fetches
- * comes from whatever image the user right-clicked, and a page controls that
- * completely. Without this guard a page could embed an image pointing at the
- * loopback interface, the LAN, or a cloud instance-metadata endpoint, and a
- * single right-click would fetch it with the extension's privileges and hand
- * the bytes back into the page's own context.
- *
- * The extension only ever needs to fetch publicly routable images, so refusing
- * the private ranges outright costs nothing.
- */
-const BLOCKED_HOSTNAMES = new Set([
-    'localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]',
-    'metadata.google.internal',
-]);
-
-const PRIVATE_IPV4 = /^(?:10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/;
-
-function isBlockedHost(hostname: string): boolean {
-    const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-    if (BLOCKED_HOSTNAMES.has(host) || BLOCKED_HOSTNAMES.has(hostname.toLowerCase())) {
-        return true;
-    }
-    if (PRIVATE_IPV4.test(host)) return true;
-    // IPv6 loopback, unique-local (fc00::/7) and link-local (fe80::/10).
-    if (host === '::' || host.startsWith('fc') || host.startsWith('fd') ||
-        host.startsWith('fe8') || host.startsWith('fe9') ||
-        host.startsWith('fea') || host.startsWith('feb')) {
-        if (host.includes(':')) return true;
-    }
-    if (host.endsWith('.localhost') || host.endsWith('.internal')) return true;
-    return false;
-}
+import { isBlockedHost, isValidImageUrl } from './urlGuard';
 
 function isBackgroundMessage(message: unknown): message is BackgroundMessage {
     if (!message || typeof message !== 'object') return false;
@@ -62,21 +25,6 @@ function isBackgroundMessage(message: unknown): message is BackgroundMessage {
         (candidate.type === 'FETCH_IMAGE_AS_DATA_URL' || candidate.type === 'TRIGGER_SCAN_FROM_POPUP') &&
         typeof candidate.url === 'string'
     );
-}
-
-function isValidImageUrl(rawUrl: string): boolean {
-    if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) {
-        return true;
-    }
-
-    try {
-        const parsed = new URL(rawUrl);
-        if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) return false;
-        if (isBlockedHost(parsed.hostname)) return false;
-        return true;
-    } catch {
-        return false;
-    }
 }
 
 /**
@@ -253,6 +201,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // read itself.
         fetch(imageUrl, { credentials: 'omit', redirect: 'follow' })
             .then(response => {
+                // Re-check the host the response actually came from. Validating
+                // only the URL we asked for leaves the guard trivially
+                // bypassable: a permitted public host can answer 302 with a
+                // Location inside the blocked ranges, and fetch follows it. A
+                // service worker cannot inspect the hops (redirect 'manual'
+                // yields an opaque response with no readable Location), so the
+                // check happens on the final response.url instead, before the
+                // body is read.
+                //
+                // Residual, stated rather than hidden: the request itself is
+                // still issued, so a blind GET to an internal address remains
+                // possible. What this prevents is the response coming back.
+                try {
+                    if (isBlockedHost(new URL(response.url).hostname)) {
+                        throw new Error('Redirected to a blocked host');
+                    }
+                } catch (e) {
+                    throw e instanceof Error ? e : new Error('Bad response URL');
+                }
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }

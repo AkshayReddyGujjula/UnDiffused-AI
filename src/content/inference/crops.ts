@@ -122,7 +122,17 @@ export function generateGridCrops(width: number, height: number): CropRect[] {
     crops.push({ x: xCenter, y: yBottom, width: sizeX, height: sizeY, label: 'Bottom-Center' });
     crops.push({ x: xRight, y: yBottom, width: sizeX, height: sizeY, label: 'Bottom-Right' });
 
-    return crops;
+    // Drop duplicates. Once an axis is clamped, its three offsets collapse to
+    // the same value: a 100x1000 image gives xLeft = xCenter = xRight = 0, so
+    // the nine rectangles above are only three distinct crops, each scored
+    // three times. generateDeepScanTiles has always deduped for this reason.
+    const seen = new Set<string>();
+    return crops.filter(c => {
+        const key = `${c.x}:${c.y}:${c.width}:${c.height}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 }
 
 /**
