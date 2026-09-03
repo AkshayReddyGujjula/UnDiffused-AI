@@ -1,20 +1,30 @@
-# Public Assets
+# Runtime assets
 
-This directory contains:
-- `models/model_quantized.onnx` - The extension model currently loaded at runtime
-- Extension icons
+Everything in this directory is copied into the extension build.
 
-## Generating the Model
+## Shipped model
 
-Model/tooling scripts live under `scripts/`. Ensure exported ONNX input/output names and class mapping match extension runtime expectations before replacing the bundled model.
+- `models/detector_v2_finetuned_int8.onnx` is the 24.9 MB detector loaded by
+  `src/content/inference/pipeline.ts`.
+- `models/detector_v2_finetuned_meta.json` records its generated tensor and
+  preprocessing contract.
 
-Run the training script:
+The full precision ONNX export is a regenerable intermediate and is deliberately
+excluded. To reproduce, export, calibrate, score, and verify the model, follow
+`docs/TRAINING_GUIDE.md`.
 
-```bash
-C:\venv\undiff\Scripts\python.exe scripts/train.py
-```
+## Browser runtime
 
-For quick testing with a subset of data:
-```bash
-C:\venv\undiff\Scripts\python.exe scripts/train.py --test
-```
+The four files under `wasm/` are ONNX Runtime Web builds selected by the runtime
+according to browser SIMD and threading support. They are stored in Git LFS.
+
+Do not replace a model solely because it runs in Python. Before changing the
+runtime artifact, require all of the following:
+
+1. Export verification against PyTorch.
+2. Scoring of the exact int8 file on the external matched control.
+3. Calibration and abstention thresholds fitted for that model.
+4. `BROWSER_CHECK_PASS` from `scripts/verify/browser_check.html`.
+
+The tensor names, shape, class meaning, preprocessing values, temperature, and
+abstention band must continue to match `src/content/inference/contract.ts`.

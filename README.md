@@ -329,6 +329,17 @@ docs/TRAINING_GUIDE.md     reproducing the model from scratch on one GPU
 models/v1_archive/         the two dead checkpoints, kept for reproducibility
 ```
 
+---
+
+## Licence
+
+Copyright 2026 Akshay Reddy Gujjula. Licensed under the
+[Apache License 2.0](LICENSE).
+
+The shipped detector is derived from Apache-2.0-licensed DINOv2 weights. Other
+dependencies and the archived v1 checkpoints retain their own terms; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 Image corpora are not committed. Their manifests are, pinning every source URL
 and SHA-256, so `scripts/bench/fetch_matched_control.py` reconstructs them
 byte-for-byte.

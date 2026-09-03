@@ -11,6 +11,12 @@ index of both models produced an AUROC whose 95% bootstrap interval contained
 
 Removing them from the bundle cuts roughly 174 MB from the extension package.
 
+Their original provenance and licence were not recorded. They are retained only
+as historical evidence for the measured v1 baseline and are not relicensed by
+the repository's Apache 2.0 licence. Do not redistribute or use them outside
+that evidentiary context without first establishing that you have the necessary
+rights.
+
 To reproduce the v1 baseline:
 
 ```bash
