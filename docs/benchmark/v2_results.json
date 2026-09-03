@@ -1,0 +1,260 @@
+{
+  "generated_utc": "2026-09-03T04:45:36.495249+00:00",
+  "model": "../../public/models/detector_v2_probe_int8.onnx",
+  "model_size_mb": 24.9,
+  "metadata": {
+    "name": "detector_v2_probe",
+    "generated_utc": "2026-09-03T04:39:49.877089+00:00",
+    "kind": "frozen DINOv2 backbone + linear probe (scaler and temperature folded in)",
+    "backbone": "facebook/dinov2-small",
+    "input_name": "pixel_values",
+    "input_shape": [
+      "batch_size",
+      "3",
+      "224",
+      "224"
+    ],
+    "output_name": "logits",
+    "output_shape": [
+      "batch_size"
+    ],
+    "num_classes": 1,
+    "output_kind": "single calibrated logit; P(AI) = sigmoid(logit)",
+    "ai_class_index": 0,
+    "ai_class_note": "One logit trained with BCE against label 1 = generated, so higher means more likely AI. A property of the training objective, not an assumption.",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "input_size": 224,
+    "pooling": "mean over patch tokens (excludes CLS)",
+    "temperature_folded": 1.4137,
+    "calibrated": true,
+    "benchmark": "docs/benchmark/v2_matched_probe.json",
+    "verification": {
+      "max_abs_divergence_head_vs_sklearn": 1.4176329363735363e-06,
+      "max_abs_divergence_onnx_vs_torch": 1.0371208190917969e-05,
+      "tolerance": 0.001,
+      "passed": true
+    },
+    "quantized": {
+      "file": "detector_v2_probe_int8.onnx",
+      "size_mb": 24.9,
+      "compression_vs_fp32": 3.55,
+      "max_abs_divergence_vs_pytorch": 1.0260471105575562,
+      "note": "Lossy. Score this file on the benchmark before shipping it."
+    }
+  },
+  "v1_shipped_baseline_auroc": 0.5,
+  "eval_sets": {
+    "matched_control_v1": {
+      "identity": {
+        "auroc": 0.894,
+        "ci95": [
+          0.8725,
+          0.914
+        ],
+        "accuracy": 0.8075,
+        "fpr_at_95tpr": 0.4125,
+        "ece": 0.0348,
+        "per_generator": {
+          "stable-diffusion-v1-4": 0.8818,
+          "IF-II-L-v1.0": 0.9029,
+          "stable-diffusion-2-1-base": 0.8895,
+          "stable-diffusion-xl-base-1.0": 0.9018
+        }
+      },
+      "normalize_512_q90": {
+        "auroc": 0.8957,
+        "ci95": [
+          0.8729,
+          0.916
+        ],
+        "accuracy": 0.8125,
+        "fpr_at_95tpr": 0.4025,
+        "ece": 0.0259
+      },
+      "jpeg_q75": {
+        "auroc": 0.8992,
+        "ci95": [
+          0.878,
+          0.9185
+        ],
+        "accuracy": 0.815,
+        "fpr_at_95tpr": 0.395,
+        "ece": 0.0326
+      },
+      "jpeg_q50": {
+        "auroc": 0.8872,
+        "ci95": [
+          0.864,
+          0.9099
+        ],
+        "accuracy": 0.7913,
+        "fpr_at_95tpr": 0.4325,
+        "ece": 0.0408
+      },
+      "jpeg_q30": {
+        "auroc": 0.8944,
+        "ci95": [
+          0.8716,
+          0.9156
+        ],
+        "accuracy": 0.7963,
+        "fpr_at_95tpr": 0.4225,
+        "ece": 0.0408
+      },
+      "double_jpeg": {
+        "auroc": 0.8977,
+        "ci95": [
+          0.8756,
+          0.9193
+        ],
+        "accuracy": 0.8075,
+        "fpr_at_95tpr": 0.4025,
+        "ece": 0.0278
+      },
+      "resize_chain": {
+        "auroc": 0.8978,
+        "ci95": [
+          0.8763,
+          0.9176
+        ],
+        "accuracy": 0.8137,
+        "fpr_at_95tpr": 0.37,
+        "ece": 0.0293
+      },
+      "webp_q75": {
+        "auroc": 0.8919,
+        "ci95": [
+          0.8673,
+          0.9128
+        ],
+        "accuracy": 0.7975,
+        "fpr_at_95tpr": 0.4175,
+        "ece": 0.0417
+      },
+      "screenshot": {
+        "auroc": 0.8961,
+        "ci95": [
+          0.8739,
+          0.9175
+        ],
+        "accuracy": 0.815,
+        "fpr_at_95tpr": 0.3975,
+        "ece": 0.0246
+      }
+    },
+    "eval_set_v1": {
+      "identity": {
+        "auroc": 0.8708,
+        "ci95": [
+          0.8036,
+          0.9308
+        ],
+        "accuracy": 0.78,
+        "fpr_at_95tpr": 0.54,
+        "ece": 0.0514,
+        "per_generator": {
+          "stable-diffusion-v1-4": 0.8169,
+          "IF-II-L-v1.0": 0.9,
+          "stable-diffusion-2-1-base": 0.89,
+          "stable-diffusion-xl-base-1.0": 0.8783
+        }
+      },
+      "normalize_512_q90": {
+        "auroc": 0.8788,
+        "ci95": [
+          0.8068,
+          0.936
+        ],
+        "accuracy": 0.77,
+        "fpr_at_95tpr": 0.48,
+        "ece": 0.0997
+      },
+      "jpeg_q75": {
+        "auroc": 0.8748,
+        "ci95": [
+          0.8,
+          0.9332
+        ],
+        "accuracy": 0.75,
+        "fpr_at_95tpr": 0.52,
+        "ece": 0.1031
+      },
+      "jpeg_q50": {
+        "auroc": 0.872,
+        "ci95": [
+          0.7976,
+          0.9328
+        ],
+        "accuracy": 0.77,
+        "fpr_at_95tpr": 0.54,
+        "ece": 0.1047
+      },
+      "jpeg_q30": {
+        "auroc": 0.872,
+        "ci95": [
+          0.7976,
+          0.9328
+        ],
+        "accuracy": 0.81,
+        "fpr_at_95tpr": 0.56,
+        "ece": 0.1123
+      },
+      "double_jpeg": {
+        "auroc": 0.8736,
+        "ci95": [
+          0.802,
+          0.9352
+        ],
+        "accuracy": 0.78,
+        "fpr_at_95tpr": 0.46,
+        "ece": 0.0547
+      },
+      "resize_chain": {
+        "auroc": 0.8684,
+        "ci95": [
+          0.7992,
+          0.9308
+        ],
+        "accuracy": 0.77,
+        "fpr_at_95tpr": 0.52,
+        "ece": 0.0965
+      },
+      "webp_q75": {
+        "auroc": 0.87,
+        "ci95": [
+          0.8,
+          0.9332
+        ],
+        "accuracy": 0.79,
+        "fpr_at_95tpr": 0.44,
+        "ece": 0.0962
+      },
+      "screenshot": {
+        "auroc": 0.876,
+        "ci95": [
+          0.8044,
+          0.9348
+        ],
+        "accuracy": 0.77,
+        "fpr_at_95tpr": 0.5,
+        "ece": 0.0524
+      }
+    }
+  },
+  "headline": {
+    "honest_auroc_content_matched": 0.894,
+    "unmatched_auroc": 0.8708,
+    "shortcut_gap": -0.0232,
+    "reading": "Small gap: the model behaves consistently whether or not content is matched, so the score reflects detection.",
+    "vs_v1_shipped": 0.394
+  }
+}

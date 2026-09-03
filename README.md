@@ -131,17 +131,17 @@ pairs never used in training:
 
 | Transform | AUROC | ECE |
 |---|---|---|
-| none | 0.894 | 0.036 |
-| normalized 512px q90 | 0.895 | 0.038 |
-| JPEG q75 | 0.897 | 0.039 |
+| none | 0.894 | 0.035 |
+| normalized 512px q90 | 0.896 | 0.037 |
+| JPEG q75 | 0.899 | 0.038 |
 | JPEG q50 | 0.887 | 0.041 |
-| JPEG q30 | 0.891 | 0.044 |
-| double JPEG | 0.896 | 0.039 |
-| resize chain | 0.895 | 0.034 |
-| WebP q75 | 0.891 | 0.039 |
-| screenshot re-capture | 0.896 | 0.022 |
+| JPEG q30 | 0.894 | 0.042 |
+| double JPEG | 0.898 | 0.038 |
+| resize chain | 0.898 | 0.033 |
+| WebP q75 | 0.892 | 0.038 |
+| screenshot re-capture | 0.896 | 0.023 |
 
-The spread across all nine is 0.010. The stability is itself the evidence that
+The spread across all nine is 0.012 (full data: [docs/benchmark/v2_results.json](docs/benchmark/v2_results.json)). The stability is itself the evidence that
 the model leans on global low-frequency structure rather than the
 generator-specific high-frequency artifacts that recompression destroys.
 
