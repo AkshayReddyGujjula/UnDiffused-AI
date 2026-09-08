@@ -78,7 +78,7 @@ export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage, onResult }) => 
 
             setProgress(60);
 
-            // Residual normalized by signal level (PRNU is multiplicative).
+            // Residual normalised by signal level because PRNU is multiplicative.
             const residual = new Float32Array(w * h);
             let residualAbsSum = 0;
             for (let i = 0; i < w * h; i++) {
@@ -180,7 +180,7 @@ export const PRNUTool: React.FC<PRNUToolProps> = ({ targetImage, onResult }) => 
 
             for (let i = 0; i < w * h; i++) {
                 const idx = i * 4;
-                // Centered grayscale around zero residual.
+                // Centred greyscale around zero residual.
                 const normalized = residual[i] / denom;
                 const mapped = Math.round((normalized * 0.5 + 0.5) * 255);
                 outData.data[idx] = mapped;

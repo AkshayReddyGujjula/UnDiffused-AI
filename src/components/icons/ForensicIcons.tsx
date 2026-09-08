@@ -85,7 +85,7 @@ export const IconAberration: React.FC<IconProps> = ({ size = 20, color = 'curren
     </svg>
 );
 
-// 9. Compression Artifacts - Pixel / Grid
+// 9. Compression artefacts: pixel grid.
 export const IconCompression: React.FC<IconProps> = ({ size = 20, color = 'currentColor', ...props }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
         <rect x="3" y="3" width="18" height="18" rx="2" />

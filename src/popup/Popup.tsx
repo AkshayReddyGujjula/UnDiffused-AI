@@ -118,7 +118,7 @@ export const Popup: React.FC = () => {
                 </div>
 
                 <p className="text-xs text-center text-white/30 mt-4">
-                    Image will be analyzed in the active tab
+                    Image will be analysed in the active tab
                 </p>
             </GlassCard>
         </div>

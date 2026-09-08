@@ -17,8 +17,8 @@ DINOv2 code and model weights are released under Apache 2.0:
 The extension directly depends on ONNX Runtime Web, React, and React DOM. The
 build uses Vite and related development tooling. Their exact versions and full
 transitive dependency graph are pinned in `package-lock.json`; each package's
-licence metadata is recorded there. The directly used packages are MIT licensed
-at the versions currently pinned.
+licence metadata is recorded there. Direct and development dependencies include
+MIT and Apache-2.0 licensed packages at the versions currently pinned.
 
 ## Datasets
 

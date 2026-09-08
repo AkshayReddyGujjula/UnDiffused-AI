@@ -1,346 +1,272 @@
 # UnDiffused
 
-A Chrome extension that detects AI-generated images entirely on-device. More to
-the point, it is a record of measuring a shipped model, finding it detected
-nothing, and rebuilding it under an evaluation protocol strict enough to catch
-its own replacement cheating.
+<p align="center">
+  <img src="docs/assets/undiffused-hero.svg" alt="UnDiffused: on-device AI image detection, measured honestly and shipped in the browser" width="100%">
+</p>
 
-Every number below is reproducible from the scripts in this repository, and the
-unflattering ones are included on purpose.
+<p align="center">
+  <a href="https://github.com/AkshayReddyGujjula/UnDiffused-AI/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/AkshayReddyGujjula/UnDiffused-AI/ci.yml?branch=main&style=for-the-badge&label=CI"></a>
+  <a href="LICENSE"><img alt="Apache 2.0 licence" src="https://img.shields.io/badge/licence-Apache%202.0-7C3AED?style=for-the-badge"></a>
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=for-the-badge&logo=typescript&logoColor=white">
+  <img alt="ONNX Runtime Web" src="https://img.shields.io/badge/inference-ONNX%20Runtime%20Web-111827?style=for-the-badge">
+  <img alt="Chrome Manifest V3" src="https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white">
+</p>
 
----
+UnDiffused is a privacy-first Chrome extension for examining whether an image
+may be AI generated. It runs a fine-tuned DINOv2 detector locally through ONNX
+Runtime Web and backs the verdict with ten interactive forensic tools.
 
-## The result in one table
+This repository is also the complete engineering record. I measured the model
+that the first extension shipped, found that it performed at chance, caught a
+replacement learning a dataset shortcut, rebuilt the evaluation around
+content-matched pairs, and then solved the model-contract and browser-runtime
+failures between a good Python result and a working extension.
 
-| | Model | Content-matched AUROC | Notes |
-|---|---|---|---|
-| **v1 (shipped)** | 2 × ViT-B/16, 174 MB | **0.50** | Caught 0 of 50 generated images |
-| **v2 probe** | DINOv2-S/14 + frozen linear probe, 24.9 MB | **0.894** | The first honest rebuild |
-| **v2 fine-tuned (shipping)** | DINOv2-S/14, last blocks unfrozen, 24.9 MB | **0.954** | Calibrated, abstains when unsure |
+> The aim is not to present AI-image detection as solved. The aim is to show how
+> I turned an unsupported product claim into a measured, reproducible system
+> with explicit limits.
 
-Both v2 figures are measured on **content-matched pairs**: each real photograph is
-paired with an AI image generated from that photograph's own caption, so subject
-matter is held constant and only authenticity varies. That is a harder and more
-honest test than the usual one, and the reason for it is the most interesting
-part of this project.
+## At a glance
 
----
+| Shipping result | Measurement |
+|---|---:|
+| External content-matched AUROC | **0.954** |
+| Calibrated expected calibration error | **0.022** |
+| Model size | **24.9 MB INT8 ONNX** |
+| Compression against FP32 | **3.55x smaller** |
+| Warm browser inference | **about 0.7 to 0.9 seconds** |
+| External evaluation set | **400 pairs, 800 images** |
+| Laundering sweep | **0.948 to 0.958 AUROC** |
 
-## Four findings
+The shipping claims come from
+[`v2_finetuned_results.json`](docs/benchmark/v2_finetuned_results.json) and
+[`v2_finetuned_calibration.json`](docs/benchmark/v2_finetuned_calibration.json).
+The evaluation set was not used for training or threshold fitting.
 
-### 1. The shipped model detected nothing
+<p align="center">
+  <img src="docs/assets/model-progression.svg" alt="Measured AUROC progression from the chance-level v1 audit to 0.954 in the shipping detector" width="88%">
+</p>
 
-The extension had been shipping two 87 MB checkpoints with no provenance, no
-label map, and no measured accuracy. Running them against 100 labelled images:
+| Stage | Model | Honest test AUROC | What changed |
+|---|---|---:|---|
+| v1, measured after shipping | Two ViT-B/16 checkpoints, 174 MB | **0.500** | Established that the original system carried no useful signal |
+| v2 probe | Frozen DINOv2-S/14 and linear head | **0.894** | Removed the content shortcut with pair-safe, matched training |
+| v2, shipping | Fine-tuned DINOv2-S/14, 24.9 MB | **0.954** | Unfroze the last four blocks, calibrated the score and verified the browser path |
 
-| Model | Class 0 | Class 1 | Class 2 |
-|---|---|---|---|
-| global (3-class) | 0.540 | 0.437 | 0.495 |
-| local (2-class) | 0.520 | 0.480 | n/a |
+## Why the evaluation changed
 
-**Every 95% bootstrap interval contains 0.5.** Through the real extension path
-the pipeline caught **0 of 50** generated images and flagged 1 of 50
-photographs, an accuracy of 0.490 achieved by calling almost everything real.
+The first DINOv2 rebuild appeared to score **0.990 AUROC** on a generator held
+out from training. That result was misleading. Real photographs came from COCO,
+while generated images came from ELSA prompts derived from LAION. The model
+could distinguish the two source corpora without learning authenticity.
 
-There was also a genuine bug: the output parser handled only the 1- and 2-class
-cases, so the 3-class global model fell through to a branch that indexed
-`outputData[i]` and read across both class and batch boundaries. But **fixing it
-changed AUROC from 0.472 to 0.445.** Both are noise. The bug was concealing an
-absence, not a capability. That is the unsatisfying answer, and the true one.
+On content-matched pairs, the same shortcut model fell to **0.659 AUROC**. Each
+matched pair uses a LAION source image and an ELSA generation made from that
+image's own caption, so the subject is held approximately constant while the
+authenticity label changes. Training on those pairs closed the unmatched to
+matched gap from roughly 0.32 to less than 0.01.
 
-A sweep of 5 normalisations × 2 resize policies ruled out our own preprocessing
-as the cause: the strongest deviation anywhere was 0.341, in the inverted
-direction, consistent with noise at n=100.
+That failure shaped the project more than any model choice. A held-out generator
+does not protect an evaluation if the corpus seam remains visible.
 
-→ [`docs/benchmark/v1_baseline_note.md`](docs/benchmark/v1_baseline_note.md)
+Read the full account in [Engineering journey](docs/ENGINEERING_JOURNEY.md) and
+the final evidence in [Model card](docs/MODEL_CARD.md).
 
-### 2. A held-out generator certified a model that had learned nothing
+## System architecture
 
-The rebuild's first version scored **0.975** on an in-distribution test split and
-**0.990** on SDXL, a generator held out of training entirely. That looked like a
-solved problem.
-
-It held *flat* under JPEG q30 and screenshot simulation. That was the tell:
-generation artifacts are high-frequency and should degrade under recompression.
-Semantic content does not.
-
-The training data was COCO photographs versus ELSA renders. COCO is everyday
-scenes; ELSA prompts come from LAION web alt-text, so its renders skew to
-product shots, posters and badges. The model had learned **which dataset an
-image came from**. On content-matched pairs it scored **0.659**.
-
-A generator holdout cannot detect this. It holds out the generator while leaving
-the corpus seam intact, so the shortcut transfers. Every ELSA render still looks
-like an ELSA render, and the model gets certified at 0.990.
-
-| Trained on | Unmatched | Content-matched | Gap |
-|---|---|---|---|
-| Mismatched corpora | 0.980 | 0.659 | **0.32** |
-| Content-matched pairs | 0.877 | 0.884 | **-0.008** |
-
-Same backbone, same head. **The training data, not the architecture, decided
-whether it learned the shortcut or the signal.**
-
-### 3. An export verified in Python still failed in the browser
-
-The int8 model scored 0.894 under Python `onnxruntime` and could not load in a
-browser at all:
-
+```mermaid
+flowchart LR
+    U[User right-clicks an image] --> B[Manifest V3 service worker]
+    B --> G[URL and redirect guard]
+    G --> I[Selected image bytes]
+    I --> C[React UI in a closed Shadow DOM]
+    C --> W[Dedicated Web Worker]
+    W --> O[ONNX Runtime Web and WASM]
+    O --> M[DINOv2-S/14 INT8 model]
+    M --> V{Calibrated score}
+    V -->|below 0.2102| R[Likely authentic]
+    V -->|0.2102 to 0.6482| X[Inconclusive]
+    V -->|above 0.6482| A[Likely AI generated]
+    W --> E[Crop scores for visual evidence]
+    C --> F[Ten optional forensic tools]
 ```
-Could not find an implementation for ConvInteger(10) node with name
-'/trunk/embeddings/patch_embeddings/projection/Conv_quant'
+
+One whole-image forward pass determines the verdict. Additional crop batches
+produce explanatory heatmap evidence only; they do not vote on or alter the
+classification. Deep Scan changes the evidence tiling, not the verdict model.
+
+The detector contract is asserted before inference:
+
+```text
+input       pixel_values, float32 [batch, 3, 224, 224]
+normalise   ImageNet mean and standard deviation
+output      logits, float32 [batch]
+probability sigmoid(logit / 1.9077)
+verdict     likely authentic | inconclusive | likely AI generated
 ```
 
-`quantize_dynamic` quantizes Conv as well as MatMul, and `onnxruntime-web`'s
-WASM backend has a `MatMulInteger` kernel but no `ConvInteger` kernel. Every
-Python-side check passed. The fix is to quantize MatMul only, leaving the
-patch-embedding Conv in fp32 at a cost of 0.7 MB.
+The architecture, execution boundaries and failure behaviour are documented in
+[Architecture](docs/ARCHITECTURE.md). The reasons behind the major choices are
+recorded in [Engineering decisions](docs/DECISIONS.md).
 
-An export verified only in the framework that produced it has not been verified
-for the runtime it ships to.
-[`scripts/verify/browser_check.html`](scripts/verify/browser_check.html) now
-runs the shipped file under the real runtime.
+## Product surface
 
-### 4. Verification that bypasses the real code path proves nothing
+The extension supports two ways to start a scan:
 
-The browser check above passed while the extension threw on every single scan.
+- right-click any image and choose **Scan with UnDiffused**;
+- choose a local image from the extension popup.
 
-The exported head ends in `.squeeze(-1)`, so ONNX reports the output as rank-1
-`[batch]`. The parser required rank-2 and raised `ModelContractError` on every
-image. The harness missed it because it read the raw output buffer directly
-instead of calling the parser, so it was verifying the runtime and the weights
-while stepping around the one piece of code most likely to be wrong.
+The result panel shows the calibrated three-state verdict, model timing and
+crop-based evidence. The forensic workspace then provides:
 
-The harness now imports the real contract module, which is also why the
-abstention thresholds are no longer duplicated inside it.
-
-The same lesson turned up twice more while preparing this repository. A
-quantization guard in the probe exporter read a variable that was never
-assigned, so it raised `NameError`; a broad `except` swallowed that and recorded
-the quantization as failed while the int8 file sat on disk looking correct. And
-the private-address guard in the background worker took three attempts to get
-right, each failure now pinned by a test. Every one of these produced a
-plausible-looking result rather than an error, which is the entire theme.
-
----
-
-## How it works now
-
-**One model, one forward pass.** A DINOv2-S/14 trunk with its last transformer
-blocks unfrozen, mean-pooled over patch tokens, into a single linear layer. The
-head emits one logit, so there is no class-index question to get wrong:
-`P(AI) = sigmoid(logit / T)`.
-
-The temperature `T = 1.9077` was fitted by NLL on the training run's own
-validation split and lives on the model contract rather than in the parser,
-because the two v2 models disagree about where calibration belongs: the frozen
-probe folded its temperature into the exported graph, the fine-tune does not.
-Binding the divisor to the model that needs it means repointing between them
-cannot silently double-scale a probability. Temperature scaling is
-rank-preserving, so it moves no AUROC. What it moves is the thresholds those
-scores are read against, which is the entire reason the model was not shipped
-until this was re-derived. Calibration cut expected calibration error from 0.061
-to 0.022.
-
-**Three states, not a percentage.** Below 0.210 → likely authentic. Above
-0.648 → likely AI generated. Between → *inconclusive*, and the extension says
-so. The band was fitted on the training run's validation split against a 5%
-false-positive target under a 25% abstention ceiling fixed in advance.
-
-What it actually does, measured on 800 pairs it was neither trained nor fitted
-on:
-
-| | Abstains | FPR | TPR |
-|---|---|---|---|
-| fitted on validation (n=750) | 15.9% | **4.97%** | 93.9% |
-| measured external (n=800) | 14.3% | **6.88%** | 93.8% |
-
-**The extension claims the 6.88%.** A band fitted to hit 5% delivers 6.9% on
-data it has never seen, and quoting the 4.97% would be reporting a fitting-set
-number as a deployment number: a smaller version of the failure this repository
-exists to document. Re-fitting the band on the external set would recover the
-advertised 5% and was rejected, because it would consume the only clean
-measurement of the shipped thresholds in exchange for a nicer-sounding number.
-
-Wrongly calling a genuine photograph fake is the more damaging error, so the
-band is tuned to false-positive rate rather than to accuracy.
-
-**The contract is asserted at load time.** Tensor names, arity and class count
-are checked against the graph, and a mismatch throws rather than degrading. The
-metadata file is generated *from* the exported model, never written by hand. The
-previous attempt at this declared input `"input"` and output `"output"` when the
-real tensors were `pixel_values` and `logits`.
-
-**It holds under laundering.** An image in the wild has been re-encoded, resized
-or screenshotted several times before anyone right-clicks it, so every figure is
-reported under those conditions too. Shipped int8 model, 400 content-matched
-pairs never used in training:
-
-| Transform | AUROC | ECE (uncalibrated) |
-|---|---|---|
-| none | 0.954 | 0.071 |
-| normalized 512px q90 | 0.956 | 0.065 |
-| JPEG q75 | 0.955 | 0.068 |
-| JPEG q50 | 0.948 | 0.083 |
-| JPEG q30 | 0.950 | 0.080 |
-| double JPEG | 0.958 | 0.067 |
-| resize chain | 0.954 | 0.072 |
-| WebP q75 | 0.951 | 0.075 |
-| screenshot re-capture | 0.957 | 0.065 |
-
-The spread across all nine is 0.010 (full data:
-[docs/benchmark/v2_finetuned_results.json](docs/benchmark/v2_finetuned_results.json)).
-The ECE column is measured on the raw sigmoid, before temperature scaling; after
-calibration it is **0.022** on the untransformed set. The AUROC stability is
-itself the evidence that the model leans on global low-frequency structure
-rather than the generator-specific high-frequency artifacts that recompression
-destroys.
-
-Per generator on the same set, with SDXL held out of training entirely:
-
-| Generator | AUROC |
+| Signal family | Tools |
 |---|---|
-| stable-diffusion-v1-4 | 0.941 |
-| DeepFloyd IF-II-L | 0.952 |
-| stable-diffusion-2-1-base | 0.963 |
-| stable-diffusion-xl (held out) | 0.962 |
+| Compression | Error level analysis, JPEG block analysis |
+| Sensor and noise | Noise pattern, PRNU-style residuals |
+| Structure | Clone detection, luminance gradients, frequency-domain FFT |
+| Optics and lighting | Chromatic aberration, specular highlights |
+| File evidence | Metadata and EXIF inspection |
 
----
+These tools are visual aids, not independent authenticity classifiers. Their
+outputs should be interpreted alongside the model result and image context.
 
-## Reproducing
+## Install locally
 
-```bash
-pip install -r requirements.txt
-```
+### Prerequisites
 
-```bash
-python scripts/bench/fetch_eval_set.py          # 100 labelled images
-cd scripts/bench && python run_baseline.py      # the v1 result: 0.50
-```
+- Git and [Git LFS](https://git-lfs.com/)
+- Node.js and npm
+- Google Chrome or another Chromium browser with extension developer mode
 
-```bash
-python scripts/bench/fetch_matched_control.py --pairs 4000 --out docs/benchmark/matched_corpus_v1
-python scripts/bench/extract_features.py --eval-dir docs/benchmark/matched_corpus_v1 --eval-name matched_corpus_v1
-python scripts/bench/train_matched_probe.py     # the v2 probe: 0.894
-python scripts/train/export_probe_onnx.py --quantize
-```
-
-The shipping model is a GPU fine-tune of the same backbone, calibrated
-separately because its exported graph emits a raw logit:
+### Build and load
 
 ```bash
-python scripts/train/finetune_gpu.py            # ~35 min on a GTX 1660 Ti
-python scripts/train/export_onnx.py --quantize
-python scripts/bench/score_model.py --model public/models/detector_v2_finetuned_int8.onnx --meta public/models/detector_v2_finetuned_meta.json --eval-sets docs/benchmark/matched_control_v1
-python scripts/bench/calibrate_onnx.py          # temperature and abstention band
+git clone https://github.com/AkshayReddyGujjula/UnDiffused-AI.git
+cd UnDiffused-AI
+git lfs install
+git lfs pull
+npm ci
+npm run build
 ```
 
-To train on a GPU, see **[docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md)**,
-written for someone who has never trained a model before.
+Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**
+and select the generated `dist/` directory. Right-click an image and choose
+**Scan with UnDiffused**.
 
-The evaluation protocol is fixed and versioned in
-[`docs/benchmark/PROTOCOL.md`](docs/benchmark/PROTOCOL.md).
+The model and WASM files are large Git LFS objects. If the extension cannot
+load the model after cloning, run `git lfs pull` and rebuild.
 
-### Tests
+## Verify the repository
 
 ```bash
 npm test
+npm run build
+npm run verify:repo
+npm audit --audit-level=low
+git lfs fsck
 ```
 
-31 regression tests, no new dependencies (Node's built-in runner). The central
-one pins the output striding with four batch items whose dominant classes
-differ, so an indexing error cannot pass by coincidence. Others pin the
-temperature divisor to its contract, so a model swap cannot double-apply
-calibration; pin the abstention band to reporting its external measurement
-rather than its fitting-set one; reject a non-finite logit rather than letting
-it render as a confident verdict; and cover the background worker's private
-address guard against the encodings that defeat a naive one, including
-`2130706433` and `::ffff:7f00:1`, both of which are `127.0.0.1`.
+The test suite pins the model parser, calibration divisor, abstention thresholds,
+non-finite output handling and private-address protections. The repository check
+validates JSON, local Markdown links and the no-Unicode-dash writing rule. CI
+runs the same core checks on every pull request.
 
----
+To reproduce the ML pipeline, start with the
+[Training guide](docs/TRAINING_GUIDE.md). The shipping evaluation contract is in
+[Benchmark protocol v2](docs/benchmark/PROTOCOL_V2.md); the original
+[`PROTOCOL.md`](docs/benchmark/PROTOCOL.md) remains the historical v1 audit.
 
-## Install the extension
+## Documentation
 
-```bash
-npm install && npm run build
+| Document | What it answers |
+|---|---|
+| [Architecture](docs/ARCHITECTURE.md) | How the extension, worker, model, security boundaries and forensic tools fit together |
+| [Model card](docs/MODEL_CARD.md) | What was trained, how it was evaluated, what the numbers mean and where they stop applying |
+| [Engineering journey](docs/ENGINEERING_JOURNEY.md) | How the project moved from the February prototype to the measured September rebuild |
+| [Engineering decisions](docs/DECISIONS.md) | Why I chose local inference, matched pairs, abstention, DINOv2 and browser-safe quantisation |
+| [Training guide](docs/TRAINING_GUIDE.md) | How to rebuild, export, score and calibrate the detector |
+| [Benchmark protocol v2](docs/benchmark/PROTOCOL_V2.md) | The fixed content-matched, laundering and calibration protocol for the shipping detector |
+| [Security policy](SECURITY.md) | Threat model summary, supported code and private reporting route |
+| [Contributing](CONTRIBUTING.md) | Setup, evidence standards, style rules and pull request checklist |
+| [Changelog](CHANGELOG.md) | The notable public milestones |
+
+## Repository map
+
+```text
+src/background/              privileged image retrieval and URL admission control
+src/content/                 injected scanner UI and isolated Shadow DOM
+src/content/inference/       runtime contract, crop selection, worker and ONNX path
+src/components/tools/        ten client-side forensic tools
+scripts/bench/               datasets, confound probes, laundering and scoring
+scripts/train/               DINOv2 fine-tuning, ONNX export and calibration
+scripts/verify/              browser-runtime and repository integrity checks
+docs/benchmark/              manifests, protocols and machine-readable evidence
+public/models/               the shipping INT8 detector and generated metadata
+public/wasm/                 pinned ONNX Runtime Web binaries
+tests/                       contract and security regression tests
 ```
 
-Then `chrome://extensions` → Developer mode → **Load unpacked** → select `dist/`.
-Right-click any image → *Scan with UnDiffused*.
+## Privacy and security
 
----
+Inference is local. The selected image, model score and verdict are not uploaded
+to a remote inference service, and the extension has no telemetry or analytics.
 
-## Privacy and permissions
+For a remote image, the background service worker may fetch the selected source
+URL because page-level CORS rules can block direct access. That privileged path
+omits credentials, rejects private, loopback, link-local, CGNAT and cloud
+metadata destinations, and validates the final URL after redirects before
+reading the response body. The result UI runs in a closed Shadow DOM so page
+scripts cannot inspect it through `element.shadowRoot`.
 
-Inference is entirely local. The model file ships inside the extension, runs on
-`onnxruntime-web` under WASM, and no image, score or verdict leaves the machine.
-There is no telemetry, no analytics and no remote endpoint of any kind.
+The optional Google Lens action opens an external Google endpoint with the
+selected image URL. It is separate from model inference and only runs after the
+user chooses it.
 
-The one component with real privilege is the background service worker, which
-holds host permissions for every `http(s)` origin so it can fetch an image the
-page will not hand over directly. That fetch is bound by neither CORS nor the
-page's origin, and the URL comes from whatever the user right-clicked, so it is
-gated by [`src/background/urlGuard.ts`](src/background/urlGuard.ts): loopback,
-private, link-local, CGNAT and cloud metadata addresses are refused, in every
-encoding the URL parser accepts, and the host is re-checked after redirects
-before any response body is read. Outbound requests send no credentials. The
-scan UI lives in a closed shadow root so the host page cannot read the verdict
-back out.
+See [Security policy](SECURITY.md) for the full trust-boundary summary and
+responsible disclosure route.
 
----
+## Known limits
 
-## What this does not do
+AI-image detection is an open research problem. This project measures one model
+against one deliberately controlled protocol; it does not establish universal
+performance.
 
-Reliable universal detection of AI-generated images is an open research problem,
-and this does not solve it. This repository measures one model on one deliberately
-difficult protocol; it does not establish performance on arbitrary generators or
-real-world distributions.
+- The external set contains 400 matched pairs from LAION and ELSA_D3 across four
+  open-source diffusion families. It does not cover Midjourney, Firefly,
+  autoregressive generators or future model families.
+- LAION source images are web images, not a verified photography-only corpus.
+  Some are graphics, product renders or screenshots.
+- The external abstention rate is 14.25%. Among decided images, the measured
+  false-positive rate is 6.88% and true-positive rate is 93.77%.
+- Cold model loading depends on the browser cache and hardware. The measured
+  0.7 to 0.9 second figure is warm single-image inference, not first load.
+- The system does not yet verify C2PA provenance. Deterministic provenance
+  should take priority wherever it is available.
+- The archived v1 checkpoints are retained for reproducibility but have unknown
+  provenance and are not part of the shipping extension.
 
-Specific limits of the numbers here:
+## Project principles
 
-- **Two source corpora only** (COCO, ELSA_D3/LAION). Four generator families,
-  all open-source diffusion: no Midjourney, no Firefly, no autoregressive
-  models.
-- **The "real" half of the matched set is LAION web imagery**, which includes
-  graphics, product renders and screenshots. Label noise depresses the score, so
-  this makes the control conservative rather than inflated, but it is not a
-  clean photographic corpus.
-- **A 14% abstention rate is real cost.** About one image in seven gets no
-  answer, and the measured false-positive rate on images it does rule on is
-  6.9%, not the 5% the band was fitted to.
-- **~0.7 to 0.9 s per image** single-threaded WASM, measured in-browser, plus a
-  one-off session initialisation of ~1.4 s warm (up to ~30 s on a cold cache
-  while the 25 MB graph is fetched and optimised).
-- **No C2PA verification yet.** Where provenance exists it should be read
-  deterministically instead of estimated.
+1. **Measure the exact artefact that ships.** Framework accuracy is not browser
+   accuracy.
+2. **Keep the clean evaluation set clean.** Thresholds are fitted on validation,
+   then reported once on external data.
+3. **Fail loudly at system boundaries.** A mismatched tensor or non-finite logit
+   is an error, not a confidence score.
+4. **Say inconclusive when the evidence is weak.** A forced binary answer would
+   make the interface look simpler and the result less honest.
+5. **Publish negative findings.** The v1 failure and shortcut result are part of
+   the work, not details to hide.
 
----
+## Licence and attribution
 
-## Layout
-
-```
-src/content/inference/     contract.ts asserts the model interface; worker.ts runs it
-src/background/urlGuard.ts admission control for the one privileged fetch
-scripts/bench/             evaluation: corpora, laundering, baselines, scoring
-scripts/train/             GPU fine-tuning, calibration and verified ONNX export
-scripts/verify/            cross-implementation and browser-runtime checks
-tests/                     31 regression tests over the contract and the guard
-docs/benchmark/            protocol, results, and the written findings
-docs/TRAINING_GUIDE.md     reproducing the model from scratch on one GPU
-models/v1_archive/         the two dead checkpoints, kept for reproducibility
-```
-
----
-
-## Licence
-
-Copyright 2026 Akshay Reddy Gujjula. Licensed under the
+Copyright 2026 Akshay Reddy Gujjula. Source code is licensed under the
 [Apache License 2.0](LICENSE).
 
-The shipped detector is derived from Apache-2.0-licensed DINOv2 weights. Other
-dependencies and the archived v1 checkpoints retain their own terms; see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The detector derives from Apache-2.0-licensed DINOv2 weights. JavaScript and
+Python dependencies retain their own licences. Dataset bytes are not committed;
+versioned manifests record source URLs and SHA-256 hashes. See
+[Third-party notices](THIRD_PARTY_NOTICES.md) for the exact boundaries.
 
-Image corpora are not committed. Their manifests are, pinning every source URL
-and SHA-256, so `scripts/bench/fetch_matched_control.py` reconstructs them
-byte-for-byte.
+If you use this repository in academic or technical work, citation metadata is
+available in [`CITATION.cff`](CITATION.cff).

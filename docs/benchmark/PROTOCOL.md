@@ -34,14 +34,14 @@ Labels: `0 = authentic`, `1 = generated`.
 Each image is evaluated twice.
 
 - **raw**: bytes as fetched.
-- **normalized**: resized to 512×512 (bicubic) and re-encoded at JPEG q90.
+- **`normalized`**: resized to 512×512 with bicubic resampling and re-encoded at JPEG q90.
 
-The normalized variant exists as a confound control. The authentic half is web
+The `normalized` variant exists as a confound control. The authentic half is web
 JPEG at assorted sizes; the generated half is clean renders at 256 to 640 px. A
 classifier can separate those two populations on compression history and
 resolution alone, without looking at anything image-forensic. If a score's
-AUROC survives normalization, the signal is about content. If it collapses, the
-checkpoint was reading encoder artifacts.
+AUROC survives normalisation, the signal is about content. If it collapses, the
+checkpoint was reading encoder artefacts.
 
 ## Preprocessing
 
@@ -55,7 +55,7 @@ which approximates canvas `drawImage`.
 | Path | What it is | What it isolates |
 |---|---|---|
 | **A**, corrected single view | Whole image → 224×224 → both models. Full softmax over all 3 classes (global) and all 2 classes (local). | The checkpoints' intrinsic behaviour, free of cropping and fusion. This is the honest v1 baseline. |
-| **B**, extension as shipped | `worker.ts` verbatim: 4 quadrants → global model → the broken flat-index parse → early-exit gate → adaptive crops → local model → `probs[0]` → 25/75 blend → threshold 0.5. | What users actually get today. |
+| **B**, historical v1 extension as shipped | `worker.ts` at the v1 measurement commit: 4 quadrants → global model → the broken flat-index parse → early-exit gate → adaptive crops → local model → `probs[0]` → 25/75 blend → threshold 0.5. | What users received under the v1 extension measured on 2 September 2026. |
 | **C**, extension geometry with correct parsing | Identical crops and fusion to B, but correct softmax and the empirically-determined AI class index. | Separates the parsing defect from the cropping and fusion design. B→C is the cost of the bug; C→A is the cost of everything else. |
 
 ## The decisive test
@@ -119,7 +119,7 @@ further forward passes.
 
 - n=100. Bootstrap intervals on AUROC are roughly ±0.07 wide at this size.
 - Two source corpora only. Source-specific quirks are not fully separable from
-  class signal, which is what the normalized variant partially addresses.
+  class signal, which is what the `normalized` variant partially addresses.
 - All four generators are open-source diffusion. No Midjourney, no Firefly, no
   autoregressive or newer families.
 - No laundering sweep (JPEG quality ladder, resize chains, screenshot

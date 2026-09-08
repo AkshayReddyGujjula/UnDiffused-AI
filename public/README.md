@@ -10,8 +10,8 @@ Everything in this directory is copied into the extension build.
   preprocessing contract.
 
 The full precision ONNX export is a regenerable intermediate and is deliberately
-excluded. To reproduce, export, calibrate, score, and verify the model, follow
-`docs/TRAINING_GUIDE.md`.
+excluded. To reproduce, export, calibrate, score and verify the model, follow
+[`docs/TRAINING_GUIDE.md`](../docs/TRAINING_GUIDE.md).
 
 ## Browser runtime
 
@@ -19,12 +19,14 @@ The four files under `wasm/` are ONNX Runtime Web builds selected by the runtime
 according to browser SIMD and threading support. They are stored in Git LFS.
 
 Do not replace a model solely because it runs in Python. Before changing the
-runtime artifact, require all of the following:
+runtime artefact, require all of the following:
 
 1. Export verification against PyTorch.
 2. Scoring of the exact int8 file on the external matched control.
 3. Calibration and abstention thresholds fitted for that model.
-4. `BROWSER_CHECK_PASS` from `scripts/verify/browser_check.html`.
+4. Generated local cases from `scripts/verify/generate_browser_cases.py`.
+5. `BROWSER_CHECK_PASS` from `scripts/verify/browser_check.html`, with the
+   console and per-image outputs inspected manually.
 
 The tensor names, shape, class meaning, preprocessing values, temperature, and
 abstention band must continue to match `src/content/inference/contract.ts`.

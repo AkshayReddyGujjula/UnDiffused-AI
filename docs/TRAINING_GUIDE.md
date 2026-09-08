@@ -34,20 +34,15 @@ Install it from nvidia.com, reboot, and try again.
 
 This is the step most likely to go wrong, for two separate reasons.
 
-**First: the default PyTorch install on Windows is CPU-only.** Installing it the
-obvious way gives a build that ignores the card entirely and trains at roughly
-one epoch per hour.
+**First: choose a CUDA-enabled PyTorch build on Windows.** The available wheel
+indexes change over time, so use the current command from the official
+[PyTorch installation selector](https://pytorch.org/get-started/locally/). Set
+the operating system to Windows, package to Pip, and choose a CUDA version
+supported by your NVIDIA driver.
 
-Install from the CUDA index instead:
-
-```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-```
-
-`cu126` (CUDA 12.6) is the right choice on any supported Python: it is the only
-index that currently carries Windows wheels for Python 3.14, and it supports the
-1660 Ti's Turing architecture. Do **not** use `cu121`, which stops at Python
-3.13.
+A CPU-only build will ignore the graphics card and can turn a short training run
+into an all-day job. Do not copy an old CUDA index from this guide without
+checking the current selector.
 
 **Second: an old driver silently blocks CUDA 12.6.** If `nvidia-smi` reported a
 driver older than about 525, update it from nvidia.com before installing.
@@ -84,7 +79,7 @@ the manifest is committed, which pins every source URL and SHA-256, so the
 corpus is reproducible without being stored. This script re-fetches it:
 
 ```bash
-python scripts/bench/fetch_matched_control.py --pairs 4000 --out docs/benchmark/matched_corpus_v1
+python scripts/bench/fetch_matched_control.py --pairs 4000 --start-offset 200000 --out docs/benchmark/matched_corpus_v1
 ```
 
 ### What these images are, and why it matters
@@ -94,7 +89,7 @@ that photograph's own caption. **Same subject, one real, one generated.**
 
 This matters more than it sounds. The first attempt at this trained on ordinary
 photographs against AI images from a different source and scored 0.99, which
-looked excellent and was almost entirely an artifact. The model had learned that
+looked excellent and was almost entirely an artefact. The model had learned that
 two piles of images came from different websites, not that one of them was
 generated. Matching the content removes that shortcut. The scores below are
 lower than 0.99, and they are the real ones.
@@ -172,7 +167,7 @@ compressed int8 version, and **checks the conversion did not change the model's
 answers**. It prints:
 
 ```
-max |torch - onnx| over 8 samples: 1.2e-06
+max |torch - onnx| over 8 samples: 1.35e-05
 export verified
 ```
 
@@ -193,13 +188,14 @@ be *measured* rather than assumed, which is Step 6.
 
 The export also refuses to write a file containing `ConvInteger`, an operation
 that works in Python and does not exist in the browser's runtime. That bug
-shipped once already; see finding 3 in the README.
+shipped once already; see the browser deployment phase in the
+[engineering journey](ENGINEERING_JOURNEY.md#phase-5-make-the-browser-part-of-the-model-contract).
 
 It writes into `public/models/`:
 
 - `detector_v2_finetuned.onnx`, full size, gitignored because it is a
   regenerable intermediate that nothing loads at runtime
-- `detector_v2_finetuned_int8.onnx`, compressed, roughly 4x smaller, and the
+- `detector_v2_finetuned_int8.onnx`, compressed 3.55x smaller, and the
   file that actually ships
 - `detector_v2_finetuned_meta.json`, the model's specification, **read from the
   exported file rather than typed by hand.** Hand-written metadata is how the
@@ -216,7 +212,7 @@ it. It is also the exact set the frozen probe scored 0.894 on, which is what
 makes the comparison fair. About 4 minutes:
 
 ```bash
-python scripts/bench/fetch_matched_control.py --pairs 400 --out docs/benchmark/matched_control_v1
+python scripts/bench/fetch_matched_control.py --pairs 400 --start-offset 100000 --out docs/benchmark/matched_control_v1
 ```
 
 Then score the **int8** file against it. Keep this on one line: the `--eval-sets`
@@ -321,9 +317,11 @@ npm test && npm run build && npm run verify:bundle
 A stale copy makes the browser check verify thresholds that are no longer
 shipped, and it still reports a pass.
 
-Finally, confirm the model runs in a browser, which Python cannot tell you:
+Generate a small ignored case bundle from the fetched external corpus, then
+confirm the model runs in a browser, which Python cannot tell you:
 
 ```bash
+python scripts/verify/generate_browser_cases.py
 python -m http.server 8899
 ```
 

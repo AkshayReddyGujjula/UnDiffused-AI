@@ -32,7 +32,7 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage, onResult }) =
         y: number,
         blockSize: number
     ): Float32Array => {
-        // 4x4 mean-pooled patch descriptor normalized by local mean.
+        // 4x4 mean-pooled patch descriptor normalised by local mean.
         const grid = 4;
         const cell = Math.max(1, Math.floor(blockSize / grid));
         const values = new Float32Array(grid * grid);
@@ -72,7 +72,7 @@ export const CloneTool: React.FC<CloneToolProps> = ({ targetImage, onResult }) =
     const hashDescriptor = (desc: Float32Array): number => {
         let h = 2166136261;
         for (let i = 0; i < desc.length; i++) {
-            // Quantize normalized value from [-1, 1] into 32 bins.
+            // Quantise the normalised value from [-1, 1] into 32 bins.
             const q = Math.max(0, Math.min(31, Math.round((desc[i] + 1) * 15.5)));
             h ^= q;
             h = Math.imul(h, 16777619);

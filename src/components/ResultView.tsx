@@ -79,9 +79,10 @@ export const ResultView: React.FC<ResultViewProps> = ({
             };
         }
 
-        // Three states, not a percentage. The middle one is a real answer: the
-        // band is tuned so that ruling on an image implies a ~5% false-positive
-        // rate, and the cost is abstaining on about one image in four.
+        // Three states, not a forced binary answer. The band was fitted against
+        // a 5% validation false-positive target. On the untouched external set,
+        // it abstained on 14.25% and produced 6.88% false positives among
+        // decided authentic images.
         if (verdict === 'likely_ai') {
             return {
                 label: "Likely AI generated",
@@ -119,7 +120,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
 
 
-    // Normalize opacity/slider to pure reveal progress
+    // Normalise opacity and slider position to pure reveal progress.
     const revealProgress = heatmapOpacity;
 
     return (
@@ -154,11 +155,11 @@ export const ResultView: React.FC<ResultViewProps> = ({
                 <div className="mt-4 mb-4 relative rounded-xl overflow-hidden border border-white/10 bg-black/20 group">
                     <img
                         src={targetImage}
-                        alt="Analyzed"
+                        alt="Analysed"
                         className="w-full h-auto max-h-[400px] object-contain block relative z-0"
                     />
 
-                    {/* Crop Visualization Overlay */}
+                    {/* Crop visualisation overlay */}
                     {result.cropResults && result.cropResults.length > 0 && result.heatmapWidth && result.heatmapHeight && (
                         <div className="absolute inset-0 z-10 pointer-events-none">
                             {result.cropResults.map((crop, idx) => {
@@ -170,7 +171,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
                                 // Reveal logic:
                                 // Map slider (0-100) to X-axis position (0-100).
-                                // If crop's center X is less than slider value, show it.
+                                // Show the crop when its centre X is below the slider value.
                                 // Determine invalid/default dimensions if missing
                                 // (Logic is handled by map calculation)
 

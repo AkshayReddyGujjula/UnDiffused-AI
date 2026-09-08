@@ -3,7 +3,7 @@ export interface CropRect {
     y: number;
     width: number;
     height: number;
-    label?: string; // e.g. "Center", "Top-Left", "Global"
+    label?: string; // For example, "Centre", "Top-Left" or "Global".
 }
 
 export interface CropResult {

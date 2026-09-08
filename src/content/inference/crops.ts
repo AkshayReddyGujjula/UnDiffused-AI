@@ -5,7 +5,7 @@ const PATCH_SIZE = 224;
 /**
  * Generates the default set of crops:
  * 1. Global (resized)
- * 2. Center
+ * 2. Centre
  * 3. Four Corners
  */
 export function generateDefaultCrops(width: number, height: number): CropRect[] {
@@ -27,7 +27,7 @@ export function generateDefaultCrops(width: number, height: number): CropRect[] 
         return crops;
     }
 
-    // 2. Center Crop
+    // 2. Centre crop
     const centerX = Math.max(0, Math.floor((width - PATCH_SIZE) / 2));
     const centerY = Math.max(0, Math.floor((height - PATCH_SIZE) / 2));
     crops.push({
@@ -35,7 +35,7 @@ export function generateDefaultCrops(width: number, height: number): CropRect[] 
         y: centerY,
         width: cropW,
         height: cropH,
-        label: 'Center'
+        label: 'Centre'
     });
 
     // 3. Four Corners
@@ -74,7 +74,7 @@ export function generateDefaultCrops(width: number, height: number): CropRect[] 
 
 /**
  * Generates a 3x3 Grid of crops (9 total) for standard inference.
- * Positions: TL, TC, TR, ML, Center, MR, BL, BC, BR
+ * Positions: TL, TC, TR, ML, centre, MR, BL, BC, BR.
  */
 export function generateGridCrops(width: number, height: number): CropRect[] {
     const crops: CropRect[] = [];
@@ -97,29 +97,29 @@ export function generateGridCrops(width: number, height: number): CropRect[] {
     const sizeX = Math.min(PATCH_SIZE, width);
     const sizeY = Math.min(PATCH_SIZE, height);
 
-    // X Axis: Left(0), Center((W-sizeX)/2), Right(W-sizeX)
+    // X axis: left, centre and right.
     const xLeft = 0;
     const xCenter = Math.max(0, Math.floor((width - sizeX) / 2));
     const xRight = Math.max(0, width - sizeX);
 
-    // Y Axis: Top(0), Center((H-sizeY)/2), Bottom(H-sizeY)
+    // Y axis: top, centre and bottom.
     const yTop = 0;
     const yCenter = Math.max(0, Math.floor((height - sizeY) / 2));
     const yBottom = Math.max(0, height - sizeY);
 
     // Top Row
     crops.push({ x: xLeft, y: yTop, width: sizeX, height: sizeY, label: 'Top-Left' });
-    crops.push({ x: xCenter, y: yTop, width: sizeX, height: sizeY, label: 'Top-Center' });
+    crops.push({ x: xCenter, y: yTop, width: sizeX, height: sizeY, label: 'Top-Centre' });
     crops.push({ x: xRight, y: yTop, width: sizeX, height: sizeY, label: 'Top-Right' });
 
     // Middle Row
     crops.push({ x: xLeft, y: yCenter, width: sizeX, height: sizeY, label: 'Mid-Left' });
-    crops.push({ x: xCenter, y: yCenter, width: sizeX, height: sizeY, label: 'Center' });
+    crops.push({ x: xCenter, y: yCenter, width: sizeX, height: sizeY, label: 'Centre' });
     crops.push({ x: xRight, y: yCenter, width: sizeX, height: sizeY, label: 'Mid-Right' });
 
     // Bottom Row
     crops.push({ x: xLeft, y: yBottom, width: sizeX, height: sizeY, label: 'Bottom-Left' });
-    crops.push({ x: xCenter, y: yBottom, width: sizeX, height: sizeY, label: 'Bottom-Center' });
+    crops.push({ x: xCenter, y: yBottom, width: sizeX, height: sizeY, label: 'Bottom-Centre' });
     crops.push({ x: xRight, y: yBottom, width: sizeX, height: sizeY, label: 'Bottom-Right' });
 
     // Drop duplicates. Once an axis is clamped, its three offsets collapse to
@@ -175,7 +175,7 @@ export function generateDeepScanTiles(width: number, height: number): CropRect[]
  * 1. Sliding Window (224x224, stride 56)
  * 2. Rank by average quality score
  * 3. NMS (Overlap Threshold 30%)
- * 4. Fallback to center crops
+ * 4. Fall back to centre crops.
  */
 export function getAdaptiveCrops(
     width: number,
@@ -199,7 +199,7 @@ export function getAdaptiveCrops(
         for (let x = 0; x <= width - size; x += stride) {
             let totalScore = 0;
             // Compute average score for this window from qualityMap
-            // Optimization: Compute using integral image if strictly needed, 
+            // Optimisation: use an integral image if this becomes necessary.
             // but for 224x224 window with stride, straightforward sampling might be heavy (224*224*steps).
             // Actually, we can just sample a grid of points inside the window to approximate the score 
             // instead of every single pixel, to save time.
@@ -268,11 +268,11 @@ export function getAdaptiveCrops(
 
     // 5. Fallback if not enough crops
     if (crops.length < numCrops) {
-        // Use center/grid crops to fill up
+        // Use centre and grid crops to fill the remaining slots.
         const fallback = generateGridCrops(width, height);
         // Filter out fallbacks that overlap with already selected adaptive crops? 
         // Or just blindly add them to ensure we have inputs. 
-        // The prompt says: "fill the remaining slots with standard center-crop positions"
+        // Fill the remaining slots with standard centre-crop positions.
         // Let's just take unique ones from grid until filled.
 
         for (const fc of fallback) {

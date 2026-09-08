@@ -118,7 +118,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ image, title, onClose 
 
             const rect = element.getBoundingClientRect();
 
-            // Mouse position relative to container center
+            // Mouse position relative to the container centre.
             const mRelativeX = e.clientX - rect.left - rect.width / 2;
             const mRelativeY = e.clientY - rect.top - rect.height / 2;
 
@@ -247,7 +247,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ image, title, onClose 
                     >
                         <img
                             src={image}
-                            alt="Analyzed Result"
+                            alt="Analysed result"
                             className="max-w-none pointer-events-none select-none shadow-lg"
                             style={{ maxWidth: 'none', maxHeight: 'none' }} // Allow growing beyond bounds
                             draggable={false}

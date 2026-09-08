@@ -279,10 +279,10 @@ export const DETECTOR_V2_PROBE: CalibratedContract = {
  * 0.9720 on held-out SDXL; those are training-side numbers and belong in the
  * training record, not in the contract the extension asserts.
  *
- * `matchedAuroc` is the headline: 800 content-matched pairs in
- * matched_control_v1, external to training, each real photograph paired with a
- * render made from that same photograph's caption, so content is held constant
- * and only authenticity varies.
+ * `matchedAuroc` is the headline: 400 content-matched pairs, or 800 images, in
+ * matched_control_v1. The set is external to training; each source image is
+ * paired with a render made from that image's caption, so content is held
+ * approximately constant and only authenticity varies.
  *
  * `heldoutGeneratorAuroc` is the SDXL subset of that same external set. SDXL
  * was excluded from training entirely.
@@ -317,9 +317,10 @@ export const DETECTOR_V2_CALIBRATION = {
  * Below `low` -> likely authentic. Above `high` -> likely AI generated.
  * Between -> inconclusive, and the extension says so rather than guessing.
  *
- * The `measured*` fields are the band's behaviour on matched_control_v1 -- 800
- * pairs external to both training and the fit -- and NOT the validation numbers
- * it was fitted against. Those differ, and the difference matters:
+ * The `measured*` fields are the band's behaviour on matched_control_v1: 400
+ * pairs, or 800 images, external to both training and the fit. They are not the
+ * validation numbers it was fitted against. Those differ, and the difference
+ * matters:
  *
  *     fitted on val (750 imgs):  abstain 15.87%  FPR 4.97%  TPR 93.85%
  *     measured external (800):   abstain 14.25%  FPR 6.88%  TPR 93.77%

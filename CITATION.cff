@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: If you use UnDiffused in academic or technical work, please cite the software using this metadata.
+title: UnDiffused
+type: software
+authors:
+  - family-names: Gujjula
+    given-names: Akshay Reddy
+repository-code: https://github.com/AkshayReddyGujjula/UnDiffused-AI
+url: https://github.com/AkshayReddyGujjula/UnDiffused-AI
+license: Apache-2.0
+version: 1.0.0
+date-released: 2026-09-03
+abstract: A privacy-first Chrome extension and reproducible engineering study for on-device AI-image detection using a fine-tuned DINOv2 model, ONNX Runtime Web and content-matched evaluation.
+keywords:
+  - AI-image detection
+  - computer vision
+  - DINOv2
+  - ONNX Runtime Web
+  - browser extension
+  - content-matched evaluation
+  - model calibration

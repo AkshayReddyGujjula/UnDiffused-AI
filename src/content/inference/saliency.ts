@@ -37,7 +37,7 @@ export function computeQualityMap(imageData: ImageData): Float32Array {
         return cy * width + cx;
     };
 
-    // 2. Compute Metrics (Single Pass per Metric for simplicity, could be optimized)
+    // 2. Compute metrics. One pass per metric keeps the implementation clear.
 
     // --- Metric 1: Laplacian (Sharpness) ---
     // Kernel: [[0, 1, 0], [1, -4, 1], [0, 1, 0]]
@@ -92,7 +92,7 @@ export function computeQualityMap(imageData: ImageData): Float32Array {
         contrast[i] = Math.sqrt(variance);
     }
 
-    // 3. Normalize and Combine
+    // 3. Normalise and combine.
     const normLaplacian = normalize(laplacianVar);
     const normEdges = normalize(edges);
     const normContrast = normalize(contrast);
@@ -110,7 +110,7 @@ export function computeQualityMap(imageData: ImageData): Float32Array {
 function computeLocalAverage(input: Float32Array, width: number, height: number, radius: number): Float32Array {
     const output = new Float32Array(input.length);
     // Naive 5x5 convolution for now. 
-    // Optimization: Separable filter would be O(1) per pixel with integral image or 2-pass 1D Box Blur.
+    // Optimisation: a separable filter or integral image would reduce this cost.
     // Given 200ms budget, naive 5x5 is roughly 25 ops per pixel on ~1M pixels (assuming 1000x1000 img) = 25M ops.
     // This is fine for JS on desktop.
 
@@ -168,7 +168,7 @@ export function renderQualityHeatmap(qualityMap: Float32Array, width: number, he
     for (let i = 0; i < qualityMap.length; i++) {
         const score = qualityMap[i];
 
-        // Heatmap Color Map: Blue (0) -> Red (1)
+        // Heatmap colour map: blue at 0, red at 1.
         // Simple interpolation
         const r = Math.floor(score * 255);
         const b = Math.floor((1 - score) * 255);

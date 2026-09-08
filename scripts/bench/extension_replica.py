@@ -133,9 +133,9 @@ def generate_grid_crops(width: int, height: int) -> list[dict]:
     x_left, x_center, x_right = 0, max(0, (width - size) // 2), max(0, width - size)
     y_top, y_center, y_bottom = 0, max(0, (height - size) // 2), max(0, height - size)
 
-    labels = ["Top-Left", "Top-Center", "Top-Right",
-              "Mid-Left", "Center", "Mid-Right",
-              "Bottom-Left", "Bottom-Center", "Bottom-Right"]
+    labels = ["Top-Left", "Top-Centre", "Top-Right",
+              "Mid-Left", "Centre", "Mid-Right",
+              "Bottom-Left", "Bottom-Centre", "Bottom-Right"]
     coords = [(x, y) for y in (y_top, y_center, y_bottom)
               for x in (x_left, x_center, x_right)]
     return [{"x": x, "y": y, "width": size, "height": size, "label": lab}

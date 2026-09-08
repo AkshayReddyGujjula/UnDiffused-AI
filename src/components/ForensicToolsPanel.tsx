@@ -32,8 +32,8 @@ const TOOLS = [
     { icon: <IconGradient size={20} />, title: 'Luminance Gradient', desc: 'Examines edge patterns and textures', tier: 1 as const, Component: GradientTool },
     { icon: <IconPRNU size={20} />, title: 'PRNU Analysis', desc: 'Detects camera sensor fingerprint', tier: 1 as const, Component: PRNUTool },
     { icon: <IconHighlights size={20} />, title: 'Specular Highlights', desc: 'Analyses reflections for consistency', tier: 2 as const, Component: HighlightTool },
-    { icon: <IconAberration size={20} />, title: 'Chromatic Aberration', desc: 'Detects lens color fringing', tier: 2 as const, Component: AberrationTool },
-    { icon: <IconCompression size={20} />, title: 'Compression Artifacts', desc: 'Examines JPEG compression layers', tier: 2 as const, Component: CompressionTool },
+    { icon: <IconAberration size={20} />, title: 'Chromatic Aberration', desc: 'Detects lens colour fringing', tier: 2 as const, Component: AberrationTool },
+    { icon: <IconCompression size={20} />, title: 'Compression Artefacts', desc: 'Examines JPEG compression layers', tier: 2 as const, Component: CompressionTool },
     { icon: <IconMetadata size={20} />, title: 'Metadata & EXIF', desc: 'Extracts hidden image data', tier: 2 as const, Component: MetadataTool },
 ];
 
@@ -193,7 +193,7 @@ export const ForensicToolsPanel: React.FC<ForensicToolsPanelProps> = ({ targetIm
                     >
                         <img
                             src={analyzedImage}
-                            alt="Analyzed"
+                            alt="Analysed"
                             className="comparison-image"
                             style={{
                                 position: 'absolute',

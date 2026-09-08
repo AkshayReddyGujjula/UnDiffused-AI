@@ -9,7 +9,7 @@ interface AberrationToolProps {
 /**
  * Chromatic Aberration Check
  * ===========================
- * Detects lens color fringing at high-contrast edges.
+ * Detects lens colour fringing at high-contrast edges.
  * Real lens photos show slight RGB channel misalignment;
  * AI images typically lack this optical imperfection.
  */
@@ -108,7 +108,7 @@ export const AberrationTool: React.FC<AberrationToolProps> = ({ targetImage, onR
             const avgSeparation = edges.length > 0 ? totalSeparation / Math.min(edges.length, 200) : 0;
             const detected = avgSeparation > 0.05;
 
-            // Render visualization to off-screen canvas
+            // Render the visualisation to an off-screen canvas.
             const resultCanvas = document.createElement('canvas');
             resultCanvas.width = w;
             resultCanvas.height = h;

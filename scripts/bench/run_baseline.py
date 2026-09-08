@@ -247,7 +247,7 @@ def pick_ai_index(per_class_block):
 # --------------------------------------------------------------------------
 
 def build_conclusions(results):
-    """State the verdict in the artifact itself, derived from the numbers.
+    """State the verdict in the artefact itself, derived from the numbers.
 
     An index only counts as informative if its bootstrap interval excludes 0.5.
     A point estimate on one side of chance is not evidence at n=100.

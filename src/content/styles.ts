@@ -271,7 +271,7 @@ const TAILWIND_STYLES = `
 /* ===== ACTIVE STATES ===== */
 .active\\:scale-95:active { transform: scale(0.95); }
 
-/* ===== SVG COLORS ===== */
+/* ===== SVG COLOURS ===== */
 .text-\\[\\#4285F4\\] { color: #4285F4; }
 .text-\\[\\#34A853\\] { color: #34A853; }
 .text-\\[\\#FBBC05\\] { color: #FBBC05; }

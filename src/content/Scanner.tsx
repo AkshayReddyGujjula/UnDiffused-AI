@@ -103,7 +103,7 @@ export const Scanner: React.FC = () => {
                 return;
             }
             console.error('[UnDiffused] Analysis failed:', e);
-            setError(e.message || 'Failed to analyze image');
+            setError(e.message || 'Failed to analyse image');
             setState('error');
             setIsDeepScanning(false);
             imageBitmapRef.current = null;
@@ -346,7 +346,7 @@ export const Scanner: React.FC = () => {
                                             <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse-glow" />
                                             <div className="flex flex-col">
                                                 <span className="text-sm text-white/70">
-                                                    Analyzing image...
+                                                    Analysing image...
                                                 </span>
                                             </div>
                                         </div>

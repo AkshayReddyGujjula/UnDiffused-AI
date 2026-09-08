@@ -164,7 +164,7 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage, onResult }) => {
             const lowPct = totalEnergy > 0 ? (lowEnergy / totalEnergy) * 100 : 0;
             const highPct = totalEnergy > 0 ? (highEnergy / totalEnergy) * 100 : 0;
 
-            // Detect periodic grid-like peaks along center row/column.
+            // Detect periodic grid-like peaks along the centre row and column.
             const centerRow = Math.floor(center);
             const centerCol = Math.floor(center);
             let gridScore = 0;
@@ -204,7 +204,7 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage, onResult }) => {
             for (let i = 0; i < size * size; i++) {
                 const v = maxMag > 0 ? (magnitude[i] / maxMag) * 255 : 0;
                 const idx = i * 4;
-                // Blue-white color scheme
+                // Blue-white colour scheme.
                 outData.data[idx] = Math.min(255, v * 0.8);
                 outData.data[idx + 1] = Math.min(255, v * 0.9);
                 outData.data[idx + 2] = Math.min(255, v);
@@ -270,7 +270,7 @@ export const FFTTool: React.FC<FFTToolProps> = ({ targetImage, onResult }) => {
                             <div className="tool-stat-value">{stats.lowFreq.toFixed(1)}%</div>
                         </div>
                         <div className="tool-stat">
-                            <div className="tool-stat-label">Grid Artifacts</div>
+                            <div className="tool-stat-label">Grid Artefacts</div>
                             <div className="tool-stat-value" style={{ color: stats.gridArtifacts ? '#ef4444' : '#10b981' }}>
                                 {stats.gridArtifacts ? 'Detected' : 'None'}
                             </div>

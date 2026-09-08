@@ -51,7 +51,7 @@ entirely by calling almost everything real.
 
 The mechanism is visible in the score distribution. The shipped pipeline's final
 probability is squeezed into a narrow band (min 0.221, max 0.655, mean 0.385,
-standard deviation 0.052), so it almost never crosses the hardcoded 0.5
+standard deviation 0.052), so it almost never crosses the fixed 0.5
 threshold. The number shown to the user moves, which makes it look alive, but it
 moves within a range that can barely produce a positive verdict.
 
@@ -83,7 +83,8 @@ ship, but it must not be described as a fix to detection quality.
 Running the code rather than reading it overturned one prediction and sharpened
 another.
 
-**The early-exit gate never fires.** Section 3.2 of the strategy document warned
+**The early-exit gate never fires.** Section 3.2 of the
+[archived strategy document](../archive/UnDiffused-Strategy.pdf) warned
 that when the noisy global score falls outside 0.05 to 0.95 the local model is
 skipped and the noise is reported directly. Measured early-exit rate: **0.00 on
 all 100 images, in both variants.** The buggy global score is confined to a
@@ -170,7 +171,7 @@ later. That needs protocol v2.
    to a measurement rather than to an assumption.
 2. **Fix `worker.ts`, and assert the tensor contract at load time.** Class
    count, tensor names and normalisation constants are read from the model
-   rather than hardcoded, so this failure class breaks loudly instead of
+   rather than fixed in parser logic, so this failure class breaks loudly instead of
    rendering "87% AI" from noise.
 3. **Do not restore a confident verdict on these checkpoints.** They have now
    been measured. Shipping a percentage derived from them would be knowingly

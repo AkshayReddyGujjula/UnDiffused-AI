@@ -111,7 +111,7 @@ export async function runMultiCropInference(
 
         // 2. Compute Saliency/Quality Map
         const qualityMap = computeQualityMap(imageData);
-        heatmapData = qualityMap; // Store for valid visualization
+        heatmapData = qualityMap; // Store for the evidence visualisation.
 
         // 3. Generate Adaptive Crops
         crops = getAdaptiveCrops(width, height, qualityMap, 9);
