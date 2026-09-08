@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a reproducible problem in the extension, model path or tooling.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping make UnDiffused more reliable. Do not include private images or secrets.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Extension UI
+        - Image retrieval
+        - Model inference
+        - Forensic tools
+        - Training or evaluation
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      placeholder: Describe the observed behaviour and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: Include the smallest set of steps that reproduces the issue.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: Chrome version, operating system, Node or Python version where relevant
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs or screenshots
+      description: Remove personal data, image URLs, tokens and local paths before posting.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: I removed private data and secrets from the report.
+          required: true

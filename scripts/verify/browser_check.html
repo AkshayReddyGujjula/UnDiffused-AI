@@ -90,7 +90,7 @@ const sigmoid = x => 1 / (1 + Math.exp(-x));
       const verdict = toVerdict(p);
       const correct = (c.label === 'ai') ? (p > ABSTENTION_BAND.low) : (p < ABSTENTION_BAND.high);
       results.push({ ...c, p, verdict, ms, correct });
-      log(`${c.label.padEnd(4)} ${c.name.padEnd(24)} P(AI)=${p.toFixed(4)}  ${verdict.padEnd(17)} ${ms.toFixed(0)}ms`,
+      log(`${c.label.padEnd(4)} ${String(c.name).padEnd(24)} P(AI)=${p.toFixed(4)}  ${verdict.padEnd(17)} ${ms.toFixed(0)}ms`,
           correct ? 'ok' : 'bad');
     }
 

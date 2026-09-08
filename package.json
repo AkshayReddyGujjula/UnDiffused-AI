@@ -1,7 +1,7 @@
 {
   "name": "undiffused",
   "version": "1.0.0",
-  "description": "Privacy-first Chrome Extension that detects AI-generated images",
+  "description": "Privacy-first Chrome extension for on-device AI-image detection",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "pretest": "esbuild --bundle src/content/inference/contract.ts --format=esm --platform=node --external:onnxruntime-web --outfile=tests/bundle.mjs && esbuild --bundle src/background/urlGuard.ts --format=esm --platform=node --outfile=tests/urlguard.bundle.mjs",
     "test": "node --test tests/*.test.mjs",
-    "verify:bundle": "esbuild --bundle src/content/inference/contract.ts --format=esm --platform=browser --external:onnxruntime-web --outfile=scripts/verify/contract.mjs"
+    "verify:bundle": "esbuild --bundle src/content/inference/contract.ts --format=esm --platform=browser --external:onnxruntime-web --outfile=scripts/verify/contract.mjs",
+    "verify:repo": "node scripts/verify/repository_hygiene.mjs",
+    "check": "npm test && npm run build && npm run verify:repo"
   },
   "dependencies": {
     "onnxruntime-web": "^1.18.0",

@@ -107,3 +107,4 @@ scripts/verify/contract.mjs
 
 # Scratch files from review tooling, never part of the project
 _*.txt
+tmp/
