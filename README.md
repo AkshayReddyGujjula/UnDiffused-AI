@@ -75,20 +75,18 @@ the final evidence in [Model card](docs/MODEL_CARD.md).
 ## System architecture
 
 ```mermaid
-flowchart LR
-    U[User right-clicks an image] --> B[Manifest V3 service worker]
-    B --> G[URL and redirect guard]
-    G --> I[Selected image bytes]
-    I --> C[React UI in a closed Shadow DOM]
+flowchart TB
+    U[User selects an image] --> B[Manifest V3 service worker]
+    B --> G[Validate URL and retrieve image]
+    G --> C[React UI in a closed Shadow DOM]
     C --> W[Dedicated Web Worker]
-    W --> O[ONNX Runtime Web and WASM]
-    O --> M[DINOv2-S/14 INT8 model]
+    W --> M[ONNX Runtime Web, WASM and DINOv2-S/14 INT8]
     M --> V{Calibrated score}
     V -->|below 0.2102| R[Likely authentic]
     V -->|0.2102 to 0.6482| X[Inconclusive]
     V -->|above 0.6482| A[Likely AI generated]
-    W --> E[Crop scores for visual evidence]
-    C --> F[Ten optional forensic tools]
+    W -.-> E[Crop scores for visual evidence]
+    C -.-> F[Ten optional forensic tools]
 ```
 
 One whole-image forward pass determines the verdict. Additional crop batches
